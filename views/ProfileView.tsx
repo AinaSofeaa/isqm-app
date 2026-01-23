@@ -27,6 +27,14 @@ const ProfileView: React.FC = () => {
 
   const busy = saving || profileLoading;
 
+  const schemaCacheMessage = (err: any) => {
+    const message = (err?.message ?? '').toLowerCase();
+    if (message.includes('schema cache')) {
+      return 'Database schema not updated yet. Please refresh or try again.';
+    }
+    return null;
+  };
+
   useEffect(() => {
     setForm({
       full_name: profile?.full_name ?? '',
@@ -112,7 +120,10 @@ const ProfileView: React.FC = () => {
       });
       setMsg({ type: 'success', text: 'Profile saved.' });
     } catch (err: any) {
-      setMsg({ type: 'error', text: err?.message ?? 'Could not save profile. Please try again.' });
+      setMsg({
+        type: 'error',
+        text: schemaCacheMessage(err) ?? (err?.message ?? 'Could not save profile. Please try again.'),
+      });
     } finally {
       setSaving(false);
     }

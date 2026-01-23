@@ -124,10 +124,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateProfile = useCallback(async (partialProfile: Partial<Profile>) => {
     if (!user) throw new Error('No authenticated user');
     const userId = user.id;
-    const updates = Object.fromEntries(
-      Object.entries(partialProfile).filter(([, value]) => value !== undefined)
-    ) as Partial<Profile>;
-    const payload = { id: userId, ...updates };
+
+    const resolveValue = <K extends keyof Profile>(key: K, fallback: Profile[K] | null) => {
+      const value = partialProfile[key];
+      if (value !== undefined) return value;
+      return fallback;
+    };
+
+    const userType = resolveValue('user_type', profile?.user_type ?? null);
+    let institutionId = resolveValue('institution_id', profile?.institution_id ?? null);
+    let companyName = resolveValue('company_name', profile?.company_name ?? null);
+
+    if (userType === 'student') {
+      companyName = null;
+    }
+    if (userType === 'worker') {
+      institutionId = null;
+    }
+
+    const payload = {
+      id: userId,
+      full_name: resolveValue('full_name', profile?.full_name ?? null) ?? null,
+      phone: resolveValue('phone', profile?.phone ?? null) ?? null,
+      user_type: userType ?? null,
+      institution_id: institutionId ?? null,
+      company_name: companyName ?? null,
+    };
 
     setProfileLoading(true);
     try {
@@ -136,13 +158,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .upsert(payload, { onConflict: 'id' })
         .select('*')
         .single();
-      if (error) throw error;
+      if (error) {
+        const message = (error?.message ?? '').toLowerCase();
+        if (message.includes('schema cache')) {
+          throw new Error('Database schema not updated yet. Please refresh or try again.');
+        }
+        throw error;
+      }
       setProfile(data as Profile);
       return data as Profile;
     } finally {
       setProfileLoading(false);
     }
-  }, [user?.id]);
+  }, [profile, user]);
 
   const value = useMemo<AuthState>(() => ({
     session,

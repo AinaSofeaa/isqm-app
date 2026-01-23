@@ -15,6 +15,14 @@ const AuthView: React.FC = () => {
 
   const isRegister = mode === 'register';
 
+  const schemaCacheMessage = (err: any) => {
+    const message = (err?.message ?? '').toLowerCase();
+    if (message.includes('schema cache')) {
+      return 'Database schema not updated yet. Please refresh or try again.';
+    }
+    return null;
+  };
+
   useEffect(() => {
     if (mode === 'login') {
       setUserType('');
@@ -65,6 +73,7 @@ const AuthView: React.FC = () => {
         if (error) throw error;
 
         let profileSaved = true;
+        let profileErrorMessage: string | null = null;
         if (data.user) {
           const payload = {
             id: data.user.id,
@@ -76,19 +85,24 @@ const AuthView: React.FC = () => {
             .from('profiles')
             .upsert(payload, { onConflict: 'id' });
           if (profileError) {
-            console.warn('Profile upsert failed after sign up', profileError);
+            profileErrorMessage = schemaCacheMessage(profileError);
+            if (!profileErrorMessage) {
+              console.warn('Profile upsert failed after sign up', profileError);
+            }
             profileSaved = false;
           }
         }
 
-        if (profileSaved) {
+        if (profileErrorMessage) {
+          setMsg(profileErrorMessage);
+        } else if (profileSaved) {
           setMsg('Account created. Profile saved. If email confirmation is enabled, check your inbox.');
         } else {
           setMsg('Account created. If email confirmation is enabled, check your inbox. Complete your profile after signing in.');
         }
       }
     } catch (err: any) {
-      setMsg(err?.message ?? 'Something went wrong');
+      setMsg(schemaCacheMessage(err) ?? (err?.message ?? 'Something went wrong'));
     } finally {
       setBusy(false);
     }
