@@ -10,6 +10,14 @@ type InstitutionPickerProps = {
   disabled?: boolean;
 };
 
+type FetchError = {
+  message: string;
+  code?: string | null;
+};
+
+const DEFAULT_LIMIT = 25;
+const EXPANDED_LIMIT = 100;
+
 const CATEGORY_LABELS: Record<Institution['category'], string> = {
   UA: 'Universiti Awam',
   POLYTECHNIC: 'Politeknik',
@@ -65,10 +73,12 @@ const InstitutionPicker: React.FC<InstitutionPickerProps> = ({
 }) => {
   const [localInstitutions, setLocalInstitutions] = useState<Institution[]>(institutionsProp ?? []);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FetchError | null>(null);
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(0);
+  const [showAll, setShowAll] = useState(false);
+  const [maxResults, setMaxResults] = useState(DEFAULT_LIMIT);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -76,6 +86,10 @@ const InstitutionPicker: React.FC<InstitutionPickerProps> = ({
   const debouncedQuery = useDebouncedValue(query, 180);
   const normalizedQuery = normalizeText(debouncedQuery);
   const institutions = institutionsProp ?? localInstitutions;
+
+  useEffect(() => {
+    setMaxResults(DEFAULT_LIMIT);
+  }, [normalizedQuery, showAll]);
 
   useEffect(() => {
     if (institutionsProp) {
@@ -96,10 +110,14 @@ const InstitutionPicker: React.FC<InstitutionPickerProps> = ({
         .order('name', { ascending: true });
       if (!active) return;
       if (fetchError) {
-        setError('Could not load institutions. Please try again.');
+        console.warn('[InstitutionPicker] Failed to load institutions', fetchError);
+        setError({ message: fetchError.message, code: fetchError.code });
         setLocalInstitutions([]);
       } else {
         setLocalInstitutions(data ?? []);
+        if (import.meta.env.DEV) {
+          console.info('[InstitutionPicker] Loaded institutions:', data?.length ?? 0);
+        }
       }
       setLoading(false);
     };
@@ -153,9 +171,9 @@ const InstitutionPicker: React.FC<InstitutionPickerProps> = ({
     });
   }, [institutions, normalizedQuery]);
 
-  const totalMatches = normalizedQuery ? matches.length : popularInstitutions.length;
-  const baseList = normalizedQuery ? matches : popularInstitutions;
-  const limitedList = baseList.slice(0, 25);
+  const baseList = normalizedQuery ? matches : showAll ? institutions : popularInstitutions;
+  const limitedList = baseList.slice(0, maxResults);
+  const totalMatches = normalizedQuery ? matches.length : baseList.length;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -212,9 +230,11 @@ const InstitutionPicker: React.FC<InstitutionPickerProps> = ({
   };
 
   const showNoResults = normalizedQuery && !loading && limitedList.length === 0;
-  const showPopularLabel = !normalizedQuery && limitedList.length > 0;
-  const showCount = normalizedQuery && matches.length > 25;
+  const showPopularLabel = !normalizedQuery && !showAll && limitedList.length > 0;
+  const showCount = totalMatches > maxResults;
   const showEmptyList = !loading && !showNoResults && limitedList.length === 0;
+  const showMoreButton = showCount && maxResults < EXPANDED_LIMIT;
+  const showAllButton = !normalizedQuery && !showAll && institutions.length > popularInstitutions.length;
 
   return (
     <div ref={containerRef} className="relative">
@@ -245,9 +265,31 @@ const InstitutionPicker: React.FC<InstitutionPickerProps> = ({
 
       {isOpen && !disabled && (
         <div className="absolute left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-lg z-30 overflow-hidden">
-          {showPopularLabel && (
-            <div className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-              Popular
+          <div className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center justify-between">
+            <span>
+              {showPopularLabel ? 'Popular' : normalizedQuery ? 'Search results' : 'Institutions'}
+            </span>
+            {showAllButton && (
+              <button
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => setShowAll(true)}
+                className="text-[10px] font-bold text-blue-600 hover:text-blue-700"
+              >
+                Show all
+              </button>
+            )}
+          </div>
+
+          {!normalizedQuery && !showAll && (
+            <div className="px-4 pb-2 text-[11px] font-semibold text-slate-400">
+              Type to search. Showing popular institutions.
+            </div>
+          )}
+
+          {!normalizedQuery && showAll && (
+            <div className="px-4 pb-2 text-[11px] font-semibold text-slate-400">
+              Type to search to narrow results.
             </div>
           )}
 
@@ -296,8 +338,20 @@ const InstitutionPicker: React.FC<InstitutionPickerProps> = ({
           </div>
 
           {showCount && (
-            <div className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-              Showing 25 of {matches.length}
+            <div className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center justify-between">
+              <span>
+                Showing {Math.min(maxResults, totalMatches)} of {totalMatches}. Type more to narrow.
+              </span>
+              {showMoreButton && (
+                <button
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => setMaxResults(EXPANDED_LIMIT)}
+                  className="text-[10px] font-bold text-blue-600 hover:text-blue-700"
+                >
+                  Show more
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -305,7 +359,13 @@ const InstitutionPicker: React.FC<InstitutionPickerProps> = ({
 
       {error && (
         <div className="mt-2 text-[11px] font-semibold text-red-500">
-          {error}
+          {error.message}{error.code ? ` (code: ${error.code})` : ''}
+        </div>
+      )}
+
+      {import.meta.env.DEV && (
+        <div className="mt-2 text-[10px] font-semibold text-slate-400">
+          Loaded {institutions.length} institutions
         </div>
       )}
 

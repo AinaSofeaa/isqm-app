@@ -53,10 +53,11 @@ create table if not exists public.institutions (
 alter table public.institutions enable row level security;
 
 drop policy if exists "Authenticated can read institutions" on public.institutions;
-create policy "Authenticated can read institutions"
+drop policy if exists "Public can read institutions" on public.institutions;
+create policy "Public can read institutions"
   on public.institutions
   for select
-  to authenticated
+  to anon, authenticated
   using (true);
 
 -- 6) Profiles table
