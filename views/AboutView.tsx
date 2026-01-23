@@ -60,7 +60,7 @@ const AboutView: React.FC = () => {
 
         <footer className="pt-4 text-center">
           <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">
-            Politeknik Malaysia &copy; 2024
+            Politeknik Malaysia &copy; 2026
           </p>
           <p className="text-slate-300 text-[10px] mt-1">
             Developed for Civil Engineering Quantity Measurement
