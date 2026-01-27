@@ -3,13 +3,15 @@ import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../services/supabaseClient';
 import type { Profile } from '../types';
 
+const BLOCK_SESSION_KEY = 'isqm.blockNextSession';
+
 type AuthState = {
   session: Session | null;
   user: User | null;
   profile: Profile | null;
   profileLoading: boolean;
   isLoading: boolean;
-  signOut: () => Promise<void>;
+  logout: () => Promise<void>;
   refreshProfile: () => Promise<Profile | null>;
   updateProfile: (partialProfile: Partial<Profile>) => Promise<Profile>;
 };
@@ -23,20 +25,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
 
+  const shouldBlockNextSession = () => {
+    if (typeof window === 'undefined') return false;
+    return sessionStorage.getItem(BLOCK_SESSION_KEY) === '1';
+  };
+
   useEffect(() => {
     let mounted = true;
 
     const init = async () => {
       const { data } = await supabase.auth.getSession();
       if (!mounted) return;
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
+      if (!shouldBlockNextSession()) {
+        setSession(data.session);
+        setUser(data.session?.user ?? null);
+      } else {
+        setSession(null);
+        setUser(null);
+      }
       setIsLoading(false);
     };
 
     init();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (event === 'SIGNED_IN' && shouldBlockNextSession()) {
+        sessionStorage.removeItem(BLOCK_SESSION_KEY);
+        setSession(null);
+        setUser(null);
+        setIsLoading(false);
+        supabase.auth.signOut();
+        return;
+      }
       setSession(newSession);
       setUser(newSession?.user ?? null);
       setIsLoading(false);
@@ -172,18 +192,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [profile, user]);
 
+  const logout = useCallback(async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+    setProfileLoading(false);
+  }, []);
+
   const value = useMemo<AuthState>(() => ({
     session,
     user,
     profile,
     profileLoading,
     isLoading,
-    signOut: async () => {
-      await supabase.auth.signOut();
-    },
+    logout,
     refreshProfile,
     updateProfile,
-  }), [session, user, profile, profileLoading, isLoading, refreshProfile, updateProfile]);
+  }), [session, user, profile, profileLoading, isLoading, logout, refreshProfile, updateProfile]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

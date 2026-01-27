@@ -1,13 +1,19 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Building2, X } from 'lucide-react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Building2, Check, X } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 import type { Institution } from '../types';
+import { useI18n } from '../src/i18n/I18nContext';
 
 type InstitutionPickerProps = {
   valueInstitutionId: string | null;
   onChange: (inst: Institution | null) => void;
   institutions?: Institution[];
   disabled?: boolean;
+  errorMessage?: string | null;
+  showError?: boolean;
+  showSuccess?: boolean;
+  requiredHint?: string;
+  onBlur?: () => void;
 };
 
 type FetchError = {
@@ -17,12 +23,6 @@ type FetchError = {
 
 const DEFAULT_LIMIT = 25;
 const EXPANDED_LIMIT = 100;
-
-const CATEGORY_LABELS: Record<Institution['category'], string> = {
-  UA: 'Universiti Awam',
-  POLYTECHNIC: 'Politeknik',
-  COMMUNITY_COLLEGE: 'Kolej Komuniti',
-};
 
 const normalizeText = (value: string) => value.toLowerCase().trim().replace(/\s+/g, ' ');
 
@@ -70,7 +70,14 @@ const InstitutionPicker: React.FC<InstitutionPickerProps> = ({
   onChange,
   institutions: institutionsProp,
   disabled,
+  errorMessage,
+  showError,
+  showSuccess,
+  requiredHint,
+  onBlur,
 }) => {
+  const { t } = useI18n();
+  const errorId = useId();
   const [localInstitutions, setLocalInstitutions] = useState<Institution[]>(institutionsProp ?? []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<FetchError | null>(null);
@@ -86,6 +93,14 @@ const InstitutionPicker: React.FC<InstitutionPickerProps> = ({
   const debouncedQuery = useDebouncedValue(query, 180);
   const normalizedQuery = normalizeText(debouncedQuery);
   const institutions = institutionsProp ?? localInstitutions;
+  const categoryLabels = useMemo<Record<Institution['category'], string>>(
+    () => ({
+      UA: t('institution.categoryUa'),
+      POLYTECHNIC: t('institution.categoryPolytechnic'),
+      COMMUNITY_COLLEGE: t('institution.categoryCommunityCollege'),
+    }),
+    [t]
+  );
 
   useEffect(() => {
     setMaxResults(DEFAULT_LIMIT);
@@ -225,7 +240,7 @@ const InstitutionPicker: React.FC<InstitutionPickerProps> = ({
   };
 
   const renderMeta = (inst: Institution) => {
-    const label = CATEGORY_LABELS[inst.category] ?? inst.category;
+    const label = categoryLabels[inst.category] ?? inst.category;
     return inst.state ? `${label} - ${inst.state}` : label;
   };
 
@@ -235,14 +250,22 @@ const InstitutionPicker: React.FC<InstitutionPickerProps> = ({
   const showEmptyList = !loading && !showNoResults && limitedList.length === 0;
   const showMoreButton = showCount && maxResults < EXPANDED_LIMIT;
   const showAllButton = !normalizedQuery && !showAll && institutions.length > popularInstitutions.length;
+  const borderClass = showError
+    ? 'border-red-300 focus-within:border-red-400 focus-within:ring-red-100'
+    : showSuccess
+      ? 'border-emerald-200 focus-within:border-emerald-300 focus-within:ring-emerald-100'
+      : 'border-slate-100 focus-within:border-blue-500 focus-within:ring-blue-500/10';
 
   return (
     <div ref={containerRef} className="relative">
       <label className="block">
         <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-          Institusi (Cari nama politeknik/kolej komuniti/UA)
+          {t('institution.label')}
         </span>
-        <div className="mt-1 flex items-center gap-2 bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3">
+        {requiredHint && !showError && (
+          <p className="text-[11px] text-slate-400 mt-1">{requiredHint}</p>
+        )}
+        <div className={`mt-2 flex items-center gap-2 bg-slate-50 border rounded-2xl px-4 py-3 focus-within:ring-4 ${borderClass}`}>
           <Building2 size={18} className="text-slate-400" />
           <input
             ref={inputRef}
@@ -254,20 +277,38 @@ const InstitutionPicker: React.FC<InstitutionPickerProps> = ({
             onFocus={() => {
               if (!disabled) setIsOpen(true);
             }}
+            onBlur={() => {
+              onBlur?.();
+            }}
             onKeyDown={handleKeyDown}
             type="text"
-            placeholder="Contoh: PSA / Politeknik Sultan Salahuddin / UiTM"
+            placeholder={t('institution.placeholder')}
             disabled={disabled}
-            className="w-full bg-transparent outline-none text-sm font-semibold text-slate-700"
+            aria-invalid={showError ? true : undefined}
+            aria-describedby={showError && errorMessage ? errorId : undefined}
+            className="flex-1 bg-transparent outline-none text-sm font-semibold text-slate-700"
           />
+          {showSuccess && !disabled && (
+            <Check size={16} className="text-emerald-500" aria-hidden="true" />
+          )}
         </div>
       </label>
+
+      {showError && errorMessage && (
+        <div id={errorId} className="mt-2 text-[11px] font-semibold text-red-500">
+          {errorMessage}
+        </div>
+      )}
 
       {isOpen && !disabled && (
         <div className="absolute left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-lg z-30 overflow-hidden">
           <div className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center justify-between">
             <span>
-              {showPopularLabel ? 'Popular' : normalizedQuery ? 'Search results' : 'Institutions'}
+              {showPopularLabel
+                ? t('institution.popular')
+                : normalizedQuery
+                  ? t('institution.searchResults')
+                  : t('institution.institutions')}
             </span>
             {showAllButton && (
               <button
@@ -276,39 +317,39 @@ const InstitutionPicker: React.FC<InstitutionPickerProps> = ({
                 onClick={() => setShowAll(true)}
                 className="text-[10px] font-bold text-blue-600 hover:text-blue-700"
               >
-                Show all
+                {t('institution.showAll')}
               </button>
             )}
           </div>
 
           {!normalizedQuery && !showAll && (
             <div className="px-4 pb-2 text-[11px] font-semibold text-slate-400">
-              Type to search. Showing popular institutions.
+              {t('institution.typeToSearchPopular')}
             </div>
           )}
 
           {!normalizedQuery && showAll && (
             <div className="px-4 pb-2 text-[11px] font-semibold text-slate-400">
-              Type to search to narrow results.
+              {t('institution.typeToSearchNarrow')}
             </div>
           )}
 
           <div className="max-h-64 overflow-y-auto">
             {loading && (
               <div className="px-4 py-4 text-sm font-semibold text-slate-500">
-                Loading institutions...
+                {t('institution.loading')}
               </div>
             )}
 
             {showNoResults && (
               <div className="px-4 py-4 text-sm font-semibold text-slate-500">
-                No results. Try a different spelling.
+                {t('institution.noResults')}
               </div>
             )}
 
             {showEmptyList && (
               <div className="px-4 py-4 text-sm font-semibold text-slate-500">
-                No institutions available yet.
+                {t('institution.noInstitutions')}
               </div>
             )}
 
@@ -340,7 +381,10 @@ const InstitutionPicker: React.FC<InstitutionPickerProps> = ({
           {showCount && (
             <div className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center justify-between">
               <span>
-                Showing {Math.min(maxResults, totalMatches)} of {totalMatches}. Type more to narrow.
+                {t('institution.showingOf', {
+                  shown: Math.min(maxResults, totalMatches),
+                  total: totalMatches,
+                })}
               </span>
               {showMoreButton && (
                 <button
@@ -349,7 +393,7 @@ const InstitutionPicker: React.FC<InstitutionPickerProps> = ({
                   onClick={() => setMaxResults(EXPANDED_LIMIT)}
                   className="text-[10px] font-bold text-blue-600 hover:text-blue-700"
                 >
-                  Show more
+                  {t('institution.showMore')}
                 </button>
               )}
             </div>
@@ -359,13 +403,16 @@ const InstitutionPicker: React.FC<InstitutionPickerProps> = ({
 
       {error && (
         <div className="mt-2 text-[11px] font-semibold text-red-500">
-          {error.message}{error.code ? ` (code: ${error.code})` : ''}
+          {t('institution.errorFetch', {
+            message: error.message,
+            code: error.code ? t('institution.errorCode', { code: error.code }) : '',
+          })}
         </div>
       )}
 
       {import.meta.env.DEV && (
         <div className="mt-2 text-[10px] font-semibold text-slate-400">
-          Loaded {institutions.length} institutions
+          {t('institution.loadedCount', { count: institutions.length })}
         </div>
       )}
 
@@ -377,10 +424,10 @@ const InstitutionPicker: React.FC<InstitutionPickerProps> = ({
         <div className="mt-3 inline-flex items-center gap-3 rounded-2xl bg-slate-100 px-3 py-2">
           <div className="flex flex-col">
             <span className="text-xs font-bold text-slate-700">
-              {selectedInstitution ? selectedInstitution.name : 'Unknown institution'}
+              {selectedInstitution ? selectedInstitution.name : t('institution.unknownInstitution')}
             </span>
             <span className="text-[10px] font-semibold text-slate-400">
-              {selectedInstitution ? renderMeta(selectedInstitution) : 'Please select again.'}
+              {selectedInstitution ? renderMeta(selectedInstitution) : t('institution.selectAgain')}
             </span>
           </div>
           <button
@@ -388,7 +435,7 @@ const InstitutionPicker: React.FC<InstitutionPickerProps> = ({
             onClick={handleClear}
             disabled={disabled}
             className="p-1 rounded-full text-slate-500 hover:text-slate-700 hover:bg-white transition-colors disabled:opacity-50"
-            aria-label="Clear institution"
+            aria-label={t('institution.clearAria')}
           >
             <X size={14} />
           </button>

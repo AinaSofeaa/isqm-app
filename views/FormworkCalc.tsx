@@ -3,8 +3,10 @@ import React, { useState, useEffect } from 'react';
 import CalcField from '../components/CalcField';
 import { RotateCcw, Save, LayoutTemplate } from 'lucide-react';
 import { saveResultRemote } from '../services/historyService';
+import { useI18n } from '../src/i18n/I18nContext';
 
 const FormworkCalc: React.FC = () => {
+  const { t } = useI18n();
   const [length, setLength] = useState('');
   const [height, setHeight] = useState('');
   const [sides, setSides] = useState('1');
@@ -37,7 +39,8 @@ const FormworkCalc: React.FC = () => {
       setShowSaved(true);
       setTimeout(() => setShowSaved(false), 2000);
     } catch (e: any) {
-      alert(e?.message ?? 'Failed to save');
+      const message = String(e?.message ?? '');
+      alert(message.includes('outputs jsonb') ? t('common.dbMigrationRequired') : t('common.saveFailed'));
     }
   };
 
@@ -49,18 +52,18 @@ const FormworkCalc: React.FC = () => {
             <LayoutTemplate size={20} />
           </div>
           <div>
-            <h2 className="font-bold text-slate-800">Formwork Area</h2>
-            <p className="text-xs text-slate-400">Formula: L × H × No. of Sides</p>
+            <h2 className="font-bold text-slate-800">{t('legacy.formwork.title')}</h2>
+            <p className="text-xs text-slate-400">{t('legacy.formwork.formula')}</p>
           </div>
         </header>
 
-        <CalcField label="Length" value={length} onChange={setLength} placeholder="0.00" />
-        <CalcField label="Height" value={height} onChange={setHeight} placeholder="0.00" />
-        <CalcField label="Number of Sides" value={sides} onChange={setSides} placeholder="1" unit="ea" />
+        <CalcField label={t('legacy.formwork.lengthLabel')} value={length} onChange={setLength} placeholder="0.00" />
+        <CalcField label={t('legacy.formwork.heightLabel')} value={height} onChange={setHeight} placeholder="0.00" />
+        <CalcField label={t('legacy.formwork.sidesLabel')} value={sides} onChange={setSides} placeholder="1" unit="ea" />
 
         <div className="mt-8 pt-6 border-t border-slate-50">
           <div className="flex justify-between items-end mb-6">
-            <span className="text-slate-400 font-medium">Total Area</span>
+            <span className="text-slate-400 font-medium">{t('legacy.formwork.totalArea')}</span>
             <div className="text-right">
               <span className="text-4xl font-black text-orange-600">{area.toFixed(2)}</span>
               <span className="text-lg font-bold text-orange-400 ml-1">m²</span>
@@ -73,7 +76,7 @@ const FormworkCalc: React.FC = () => {
               className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-slate-100 text-slate-600 font-bold active:scale-95 transition-transform"
             >
               <RotateCcw size={18} />
-              Reset
+              {t('common.reset')}
             </button>
             <button
               onClick={handleSave}
@@ -84,16 +87,16 @@ const FormworkCalc: React.FC = () => {
                   : 'bg-slate-300 text-slate-100 cursor-not-allowed'
               }`}
             >
-              {showSaved ? 'Saved!' : <><Save size={18} /> Save</>}
+              {showSaved ? t('common.saved') : <><Save size={18} /> {t('common.save')}</>}
             </button>
           </div>
         </div>
       </div>
 
       <div className="mt-6 bg-orange-50/50 rounded-2xl p-5 border border-orange-100">
-        <h3 className="font-bold text-orange-800 text-sm mb-2">Did You Know?</h3>
+        <h3 className="font-bold text-orange-800 text-sm mb-2">{t('legacy.formwork.didYouKnowTitle')}</h3>
         <p className="text-orange-700/70 text-sm leading-relaxed">
-          Formwork area helps in estimating the amount of plywood, timber, or steel shuttering needed. For a simple beam, you usually calculate 3 sides (bottom and 2 sides).
+          {t('legacy.formwork.didYouKnowBody')}
         </p>
       </div>
     </div>
@@ -101,3 +104,5 @@ const FormworkCalc: React.FC = () => {
 };
 
 export default FormworkCalc;
+
+

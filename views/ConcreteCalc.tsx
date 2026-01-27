@@ -3,8 +3,10 @@ import React, { useState, useEffect } from 'react';
 import CalcField from '../components/CalcField';
 import { RotateCcw, Save, Calculator } from 'lucide-react';
 import { saveResultRemote } from '../services/historyService';
+import { useI18n } from '../src/i18n/I18nContext';
 
 const ConcreteCalc: React.FC = () => {
+  const { t } = useI18n();
   const [length, setLength] = useState('');
   const [width, setWidth] = useState('');
   const [height, setHeight] = useState('');
@@ -37,7 +39,8 @@ const ConcreteCalc: React.FC = () => {
       setShowSaved(true);
       setTimeout(() => setShowSaved(false), 2000);
     } catch (e: any) {
-      alert(e?.message ?? 'Failed to save');
+      const message = String(e?.message ?? '');
+      alert(message.includes('outputs jsonb') ? t('common.dbMigrationRequired') : t('common.saveFailed'));
     }
   };
 
@@ -49,18 +52,18 @@ const ConcreteCalc: React.FC = () => {
             <Calculator size={20} />
           </div>
           <div>
-            <h2 className="font-bold text-slate-800">New Measurement</h2>
-            <p className="text-xs text-slate-400">Formula: L × W × H</p>
+            <h2 className="font-bold text-slate-800">{t('legacy.concrete.title')}</h2>
+            <p className="text-xs text-slate-400">{t('legacy.concrete.formula')}</p>
           </div>
         </header>
 
-        <CalcField label="Length" value={length} onChange={setLength} placeholder="0.00" />
-        <CalcField label="Width" value={width} onChange={setWidth} placeholder="0.00" />
-        <CalcField label="Height / Depth" value={height} onChange={setHeight} placeholder="0.00" />
+        <CalcField label={t('legacy.concrete.lengthLabel')} value={length} onChange={setLength} placeholder="0.00" />
+        <CalcField label={t('legacy.concrete.widthLabel')} value={width} onChange={setWidth} placeholder="0.00" />
+        <CalcField label={t('legacy.concrete.heightLabel')} value={height} onChange={setHeight} placeholder="0.00" />
 
         <div className="mt-8 pt-6 border-t border-slate-50">
           <div className="flex justify-between items-end mb-6">
-            <span className="text-slate-400 font-medium">Total Volume</span>
+            <span className="text-slate-400 font-medium">{t('legacy.concrete.totalVolume')}</span>
             <div className="text-right">
               <span className="text-4xl font-black text-blue-700">{volume.toFixed(3)}</span>
               <span className="text-lg font-bold text-blue-400 ml-1">m³</span>
@@ -73,7 +76,7 @@ const ConcreteCalc: React.FC = () => {
               className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-slate-100 text-slate-600 font-bold active:scale-95 transition-transform"
             >
               <RotateCcw size={18} />
-              Reset
+              {t('common.reset')}
             </button>
             <button
               onClick={handleSave}
@@ -84,7 +87,7 @@ const ConcreteCalc: React.FC = () => {
                   : 'bg-slate-300 text-slate-100 cursor-not-allowed'
               }`}
             >
-              {showSaved ? 'Saved!' : <><Save size={18} /> Save</>}
+              {showSaved ? t('common.saved') : <><Save size={18} /> {t('common.save')}</>}
             </button>
           </div>
         </div>
@@ -92,14 +95,17 @@ const ConcreteCalc: React.FC = () => {
 
       <div className="mt-6 bg-blue-50/50 rounded-2xl p-5 border border-blue-100">
         <h3 className="font-bold text-blue-800 text-sm mb-2 flex items-center gap-2">
-           Learning Note
+           {t('legacy.concrete.learningNoteTitle')}
         </h3>
-        <p className="text-blue-700/70 text-sm leading-relaxed">
-          The result is expressed in <strong>cubic meters (m³)</strong>. 1 m³ is equal to approximately 35.31 cubic feet. This volume is crucial for ordering concrete ready-mix.
-        </p>
+        <p className="text-blue-700/70 text-sm leading-relaxed">{t('legacy.concrete.learningNoteBody')}</p>
       </div>
     </div>
   );
 };
 
 export default ConcreteCalc;
+
+
+
+
+

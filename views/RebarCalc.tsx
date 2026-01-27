@@ -3,8 +3,10 @@ import React, { useState, useEffect } from 'react';
 import CalcField from '../components/CalcField';
 import { RotateCcw, Save, Grid } from 'lucide-react';
 import { saveResultRemote } from '../services/historyService';
+import { useI18n } from '../src/i18n/I18nContext';
 
 const RebarCalc: React.FC = () => {
+  const { t } = useI18n();
   const [areaLength, setAreaLength] = useState('');
   const [spacing, setSpacing] = useState('');
   const [quantity, setQuantity] = useState<number>(0);
@@ -43,7 +45,8 @@ const RebarCalc: React.FC = () => {
       setShowSaved(true);
       setTimeout(() => setShowSaved(false), 2000);
     } catch (e: any) {
-      alert(e?.message ?? 'Failed to save');
+      const message = String(e?.message ?? '');
+      alert(message.includes('outputs jsonb') ? t('common.dbMigrationRequired') : t('common.saveFailed'));
     }
   };
 
@@ -55,22 +58,22 @@ const RebarCalc: React.FC = () => {
             <Grid size={20} />
           </div>
           <div>
-            <h2 className="font-bold text-slate-800">Rebar Estimator</h2>
-            <p className="text-xs text-slate-400">Formula: Area Length ÷ Spacing</p>
+            <h2 className="font-bold text-slate-800">{t('legacy.rebar.title')}</h2>
+            <p className="text-xs text-slate-400">{t('legacy.rebar.formula')}</p>
           </div>
         </header>
 
-        <CalcField label="Total Area Length" value={areaLength} onChange={setAreaLength} placeholder="0.00" />
-        <CalcField label="Bar Spacing (Center-to-Center)" value={spacing} onChange={setSpacing} placeholder="0.15" />
+        <CalcField label={t('legacy.rebar.lengthLabel')} value={areaLength} onChange={setAreaLength} placeholder="0.00" />
+        <CalcField label={t('legacy.rebar.spacingLabel')} value={spacing} onChange={setSpacing} placeholder="0.15" />
 
         <div className="mt-8 pt-6 border-t border-slate-50">
           <div className="space-y-4 mb-8">
             <div className="flex justify-between items-center">
-              <span className="text-slate-400 text-sm font-medium">Mathematical Result</span>
-              <span className="text-slate-600 font-bold">{quantity.toFixed(2)} bars</span>
+              <span className="text-slate-400 text-sm font-medium">{t('legacy.rebar.mathResult')}</span>
+              <span className="text-slate-600 font-bold">{quantity.toFixed(2)} {t('legacy.rebar.barsUnit')}</span>
             </div>
             <div className="flex justify-between items-end">
-              <span className="text-slate-400 font-medium">Site Recommended <br/><span className="text-[10px] text-slate-300">(Ceil + 1)</span></span>
+              <span className="text-slate-400 font-medium">{t('legacy.rebar.siteRecommended')} <br/><span className="text-[10px] text-slate-300">{t('legacy.rebar.siteHint')}</span></span>
               <div className="text-right">
                 <span className="text-4xl font-black text-emerald-600">{roundedQuantity}</span>
                 <span className="text-lg font-bold text-emerald-400 ml-1">pcs</span>
@@ -84,7 +87,7 @@ const RebarCalc: React.FC = () => {
               className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-slate-100 text-slate-600 font-bold active:scale-95 transition-transform"
             >
               <RotateCcw size={18} />
-              Reset
+              {t('common.reset')}
             </button>
             <button
               onClick={handleSave}
@@ -95,16 +98,16 @@ const RebarCalc: React.FC = () => {
                   : 'bg-slate-300 text-slate-100 cursor-not-allowed'
               }`}
             >
-              {showSaved ? 'Saved!' : <><Save size={18} /> Save</>}
+              {showSaved ? t('common.saved') : <><Save size={18} /> {t('common.save')}</>}
             </button>
           </div>
         </div>
       </div>
 
       <div className="mt-6 bg-emerald-50/50 rounded-2xl p-5 border border-emerald-100">
-        <h3 className="font-bold text-emerald-800 text-sm mb-2">Construction Rule</h3>
+        <h3 className="font-bold text-emerald-800 text-sm mb-2">{t('legacy.rebar.constructionRuleTitle')}</h3>
         <p className="text-emerald-700/70 text-sm leading-relaxed">
-          In actual construction, we always round up the division and <strong>add one additional starter bar</strong> to ensure the full area is covered correctly.
+          {t('legacy.rebar.constructionRuleBody')}
         </p>
       </div>
     </div>
@@ -112,3 +115,4 @@ const RebarCalc: React.FC = () => {
 };
 
 export default RebarCalc;
+

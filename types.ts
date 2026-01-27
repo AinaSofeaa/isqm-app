@@ -1,5 +1,5 @@
 
-export type CalculationType = 'concrete' | 'formwork' | 'rebar';
+export type CalculationType = 'beam' | 'column' | 'slab' | 'concrete' | 'formwork' | 'rebar';
 
 export interface SavedResult {
   id: string;
@@ -7,6 +7,7 @@ export interface SavedResult {
   timestamp: number;
   label: string;
   inputs: Record<string, number>;
+  outputs?: Record<string, unknown>;
   result: number;
   unit: string;
 }

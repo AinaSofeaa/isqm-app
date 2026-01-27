@@ -1,12 +1,14 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Layers, Maximize, Grid, BookOpen, Clock } from 'lucide-react';
+import { Layers, Maximize, Columns, BookOpen, Clock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabaseClient';
+import { useI18n } from '../src/i18n/I18nContext';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const { user, profile, profileLoading } = useAuth();
   const [institutionName, setInstitutionName] = useState<string | null>(null);
   const displayName = profile?.full_name || user?.email;
@@ -42,24 +44,24 @@ const Dashboard: React.FC = () => {
 
   const menuItems = [
     {
-      title: 'Concrete Volume',
-      desc: 'Calculate L × W × H for slabs, beams & columns.',
-      icon: <Layers size={32} className="text-blue-600" />,
-      path: '/concrete',
+      title: t('dashboard.cardColumnTitle'),
+      desc: t('dashboard.cardColumnDesc'),
+      icon: <Columns size={32} className="text-blue-600" />,
+      path: '/column',
       color: 'bg-blue-50'
     },
     {
-      title: 'Formwork Area',
-      desc: 'Calculate surface area for shuttering works.',
+      title: t('dashboard.cardBeamTitle'),
+      desc: t('dashboard.cardBeamDesc'),
       icon: <Maximize size={32} className="text-orange-600" />,
-      path: '/formwork',
+      path: '/beam',
       color: 'bg-orange-50'
     },
     {
-      title: 'Rebar Quantity',
-      desc: 'Determine number of bars based on spacing.',
-      icon: <Grid size={32} className="text-emerald-600" />,
-      path: '/rebar',
+      title: t('dashboard.cardSlabTitle'),
+      desc: t('dashboard.cardSlabDesc'),
+      icon: <Layers size={32} className="text-emerald-600" />,
+      path: '/slab',
       color: 'bg-emerald-50'
     }
   ];
@@ -70,16 +72,22 @@ const Dashboard: React.FC = () => {
       <section className="bg-slate-900 rounded-2xl p-6 text-white overflow-hidden relative shadow-lg">
         <div className="relative z-10">
           <h2 className="text-2xl font-bold mb-1">
-            {showName ? `Welcome, ${displayName}!` : 'Welcome, Builder!'}
+            {showName
+              ? t('dashboard.welcomeWithName', { name: displayName ?? '' })
+              : t('dashboard.welcomeFallback')}
           </h2>
           {showInstitutionLine && (
-            <p className="text-xs font-semibold text-slate-300 mb-2">Institusi: {institutionName ?? '...'}</p>
+            <p className="text-xs font-semibold text-slate-300 mb-2">
+              {t('dashboard.institutionLine', { name: institutionName ?? '...' })}
+            </p>
           )}
           {showCompanyLine && (
-            <p className="text-xs font-semibold text-slate-300 mb-2">Syarikat/Projek: {profile?.company_name}</p>
+            <p className="text-xs font-semibold text-slate-300 mb-2">
+              {t('dashboard.companyLine', { name: profile?.company_name ?? '' })}
+            </p>
           )}
           <p className="text-slate-400 text-sm leading-relaxed max-w-[240px]">
-            The Interactive Structure Quantity Measurement tool is ready for your site measurements.
+            {t('dashboard.intro')}
           </p>
         </div>
         <div className="absolute right-[-20px] bottom-[-20px] opacity-10 rotate-12">
@@ -89,7 +97,9 @@ const Dashboard: React.FC = () => {
 
       {/* Main Calculators */}
       <section>
-        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 ml-1">Tools</h3>
+        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 ml-1">
+          {t('dashboard.toolsTitle')}
+        </h3>
         <div className="grid gap-4">
           {menuItems.map((item, idx) => (
             <button
@@ -115,9 +125,9 @@ const Dashboard: React.FC = () => {
           <Clock size={24} className="text-yellow-700" />
         </div>
         <div>
-          <h4 className="font-bold text-slate-800">Quick Pro Tip</h4>
+          <h4 className="font-bold text-slate-800">{t('dashboard.quickTipTitle')}</h4>
           <p className="text-slate-600 text-sm mt-1">
-            Always remember to deduct structural voids like window or door openings from your final quantity.
+            {t('dashboard.quickTipBody')}
           </p>
         </div>
       </section>
@@ -126,3 +136,4 @@ const Dashboard: React.FC = () => {
 };
 
 export default Dashboard;
+

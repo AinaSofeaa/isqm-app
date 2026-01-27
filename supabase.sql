@@ -4,13 +4,19 @@
 create table if not exists public.calculations (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
-  type text not null check (type in ('concrete','formwork','rebar')),
+  type text not null check (type in ('beam','column','slab','concrete','formwork','rebar')),
   label text not null,
   inputs jsonb not null default '{}'::jsonb,
+  outputs jsonb not null default '{}'::jsonb,
   result double precision not null,
   unit text not null,
   created_at timestamptz not null default now()
 );
+
+alter table public.calculations add column if not exists outputs jsonb not null default '{}'::jsonb;
+alter table public.calculations drop constraint if exists calculations_type_check;
+alter table public.calculations add constraint calculations_type_check
+  check (type in ('beam','column','slab','concrete','formwork','rebar'));
 
 -- Helpful index for listing by user
 create index if not exists calculations_user_id_created_at_idx
