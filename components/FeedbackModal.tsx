@@ -9,10 +9,22 @@ type FeedbackModalProps = {
   variant: FeedbackVariant;
   title: string;
   message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  onConfirm?: () => void;
   onClose: () => void;
 };
 
-const FeedbackModal: React.FC<FeedbackModalProps> = ({ open, variant, title, message, onClose }) => {
+const FeedbackModal: React.FC<FeedbackModalProps> = ({
+  open,
+  variant,
+  title,
+  message,
+  confirmLabel,
+  cancelLabel,
+  onConfirm,
+  onClose,
+}) => {
   const { t } = useI18n();
 
   useEffect(() => {
@@ -30,6 +42,11 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ open, variant, title, mes
   const isError = variant === 'error';
   const iconBg = isSuccess ? 'bg-emerald-500' : isError ? 'bg-red-500' : 'bg-blue-500';
   const Icon = isSuccess ? Check : isError ? X : Info;
+  const isConfirm = Boolean(onConfirm && confirmLabel && cancelLabel);
+  const handleConfirm = () => {
+    onClose();
+    if (onConfirm) onConfirm();
+  };
 
   return (
     <div
@@ -56,14 +73,33 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ open, variant, title, mes
             {message}
           </p>
         </div>
-        <div className="mt-6 border-t border-slate-100 px-6 py-4 flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold uppercase tracking-wider"
-          >
-            {t('modal.close')}
-          </button>
+        <div className="mt-6 border-t border-slate-100 px-6 py-4 flex justify-end gap-2">
+          {isConfirm ? (
+            <>
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 text-xs font-bold uppercase tracking-wider"
+              >
+                {cancelLabel}
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirm}
+                className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold uppercase tracking-wider"
+              >
+                {confirmLabel}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold uppercase tracking-wider"
+            >
+              {t('modal.close')}
+            </button>
+          )}
         </div>
       </div>
     </div>

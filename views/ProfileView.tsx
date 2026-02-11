@@ -1,10 +1,12 @@
-import React, { useEffect, useId, useMemo, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import { Briefcase, Check, Mail, Phone, Save, User as UserIcon, XCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import InstitutionPicker from '../components/InstitutionPicker';
 import { getFieldState } from '../lib/fieldState';
 import { supabase } from '../services/supabaseClient';
 import { useI18n } from '../src/i18n/I18nContext';
+import { formatSupabaseError } from '../lib/formatSupabaseError';
+import { useFeedback } from '../contexts/FeedbackContext';
 
 type ProfileForm = {
   full_name: string;
@@ -24,11 +26,11 @@ const emptyForm: ProfileForm = {
 
 const ProfileView: React.FC = () => {
   const { t } = useI18n();
-  const { user, profile, profileLoading, updateProfile } = useAuth();
+  const { user, profile, profileLoading, updateProfile, logout } = useAuth();
   const [form, setForm] = useState<ProfileForm>(emptyForm);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<{ type: 'success' | 'error' | 'info'; key: string } | null>(null);
   const [institutionDisplay, setInstitutionDisplay] = useState<string | null>(null);
+  const { showSuccess, showError, showConfirm } = useFeedback();
   const initialTouched = {
     full_name: false,
     phone: false,
@@ -95,12 +97,6 @@ const ProfileView: React.FC = () => {
       active = false;
     };
   }, [form.institution_id, form.user_type, profile?.institution]);
-
-  const messageClasses = useMemo(() => ({
-    success: 'text-emerald-700 bg-emerald-50 border-emerald-100',
-    error: 'text-red-600 bg-red-50 border-red-100',
-    info: 'text-slate-600 bg-slate-50 border-slate-100',
-  }), []);
 
   const markTouched = (field: keyof typeof initialTouched) => {
     setTouched((prev) => ({ ...prev, [field]: true }));
@@ -206,21 +202,26 @@ const ProfileView: React.FC = () => {
     });
     setTouched(initialTouched);
     setSubmitted(false);
-    setMsg({ type: 'info', key: 'profile.changesDiscarded' });
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setMsg(null);
     setSubmitted(true);
 
     if (!user) {
-      setMsg({ type: 'error', key: 'profile.needSignInAgain' });
+      showError(
+        t('modal.profileSaveFailTitle'),
+        t('modal.profileSaveFailMsg', { error: t('profile.needSignInAgain') })
+      );
       return;
     }
 
     const hasErrors = Boolean(phoneError || institutionError || companyError);
-    if (hasErrors) return;
+    if (hasErrors) {
+      const detail = phoneError || institutionError || companyError || t('modal.profileValidationMsg');
+      showError(t('modal.profileValidationTitle'), detail);
+      return;
+    }
 
     setSaving(true);
     try {
@@ -232,15 +233,32 @@ const ProfileView: React.FC = () => {
         company_name: form.user_type === 'worker' ? trimmedCompany || null : null,
         phone: form.phone?.trim() || null,
       });
-      setMsg({ type: 'success', key: 'profile.saveSuccess' });
+      showSuccess(t('modal.profileSaveSuccessTitle'), t('modal.profileSaveSuccessMsg'));
     } catch (err: any) {
-      setMsg({
-        type: 'error',
-        key: schemaCacheMessage(err) ?? 'profile.saveError',
-      });
+      const reasonKey = schemaCacheMessage(err);
+      const reason = reasonKey ? t(reasonKey) : formatSupabaseError(err, t('common.errorTryAgain'));
+      showError(t('modal.profileSaveFailTitle'), t('modal.profileSaveFailMsg', { error: reason }));
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleLogout = () => {
+    showConfirm(
+      t('logout.confirmTitle'),
+      t('logout.confirmMsg'),
+      t('logout.confirmBtn'),
+      t('logout.cancelBtn'),
+      async () => {
+        try {
+          await logout();
+          showSuccess(t('logout.successTitle'), t('logout.successMsg'));
+        } catch (err: any) {
+          const reason = formatSupabaseError(err, t('common.errorTryAgain'));
+          showError(t('logout.failTitle'), t('logout.failMsg', { error: reason }));
+        }
+      }
+    );
   };
 
   return (
@@ -411,11 +429,14 @@ const ProfileView: React.FC = () => {
         </div>
       </form>
 
-      {msg && (
-        <div className={`text-sm font-semibold border p-3 rounded-2xl ${messageClasses[msg.type]}`}>
-          {t(msg.key)}
-        </div>
-      )}
+      <button
+        type="button"
+        onClick={handleLogout}
+        disabled={busy}
+        className="w-full py-3 rounded-2xl bg-red-50 text-red-600 border border-red-200 font-black active:scale-95 transition-transform disabled:opacity-60"
+      >
+        {t('nav.logout')}
+      </button>
     </div>
   );
 };

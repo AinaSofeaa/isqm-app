@@ -1,13 +1,12 @@
 
-import React, { useState } from 'react';
-import { HashRouter, Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom';
+import React from 'react';
+import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { 
   Home, 
   History as HistoryIcon, 
   Info, 
   ChevronLeft,
   Hammer,
-  LogOut,
   User as UserIcon
 } from 'lucide-react';
 
@@ -17,6 +16,7 @@ import ColumnMenuView from './views/ColumnMenuView';
 import SlabMenuView from './views/SlabMenuView';
 import ConcreteCalc from './views/ConcreteCalc';
 import FormworkCalc from './views/FormworkCalc';
+import SoffitCalc from './views/SoffitCalc';
 import HistoryView from './views/HistoryView';
 import AboutView from './views/AboutView';
 import AuthView from './views/AuthView';
@@ -24,17 +24,12 @@ import ProfileView from './views/ProfileView';
 import { useAuth } from './contexts/AuthContext';
 import { useI18n } from './src/i18n/I18nContext';
 import LanguageToggle from './components/LanguageToggle';
-import ConfirmDialog from './components/ConfirmDialog';
 
 const Header: React.FC = () => {
   const location = useLocation();
-  const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { t } = useI18n();
   const path = location.pathname;
-  const [logoutError, setLogoutError] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [logoutBusy, setLogoutBusy] = useState(false);
   const getTitle = () => {
     if (path === '/') return t('nav.dashboardTitle');
     if (path === '/beam') return t('flow.beamTitle');
@@ -62,20 +57,6 @@ const Header: React.FC = () => {
   const isHome = path === '/';
   const isAuth = path === '/login';
 
-  const handleLogout = async () => {
-    setLogoutError(false);
-    try {
-      setLogoutBusy(true);
-      await logout();
-      navigate('/login?logged_out=1', { replace: true });
-    } catch (error) {
-      setLogoutError(true);
-    } finally {
-      setLogoutBusy(false);
-      setConfirmOpen(false);
-    }
-  };
-
   return (
     <header className="sticky top-0 z-50 bg-blue-700 text-white px-4 py-4 shadow-md flex flex-col gap-2">
       <div className="flex items-center justify-between">
@@ -97,35 +78,11 @@ const Header: React.FC = () => {
               <UserIcon size={22} />
             </Link>
           )}
-          {user && !isAuth && (
-            <button
-              onClick={() => setConfirmOpen(true)}
-              className="opacity-80 hover:opacity-100 transition-opacity"
-              title={t('nav.logoutTooltip')}
-            >
-              <LogOut size={22} />
-            </button>
-          )}
           <Link to="/about" className="opacity-80 hover:opacity-100 transition-opacity" title={t('nav.aboutTooltip')}>
             <Info size={22} />
           </Link>
         </div>
       </div>
-      {logoutError && (
-        <div className="w-full rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-xs font-semibold text-red-700">
-          {t('auth.logoutFailed')}
-        </div>
-      )}
-      <ConfirmDialog
-        open={confirmOpen}
-        title={t('auth.logoutTitle')}
-        message={t('auth.logoutMessage')}
-        cancelLabel={t('auth.logoutCancel')}
-        confirmLabel={t('auth.logoutConfirm')}
-        confirmDisabled={logoutBusy}
-        onClose={() => setConfirmOpen(false)}
-        onConfirm={handleLogout}
-      />
     </header>
   );
 };
@@ -150,7 +107,7 @@ const BottomNav: React.FC = () => {
       </Link>
       <Link to="/about" className={`flex flex-col items-center gap-1 ${isActive('/about') ? 'text-blue-600' : 'text-slate-400'}`}>
         <Info size={22} />
-        <span className="text-[10px] font-medium uppercase tracking-wider">{t('nav.info')}</span>
+        <span className="text-[10px] font-medium uppercase tracking-wider">{t('nav.infoFaq')}</span>
       </Link>
       <Link to="/profile" className={`flex flex-col items-center gap-1 ${isActive('/profile') ? 'text-blue-600' : 'text-slate-400'}`}>
         <UserIcon size={22} />
@@ -215,14 +172,7 @@ const App: React.FC = () => {
               />
               <Route
                 path="/slab/soffit-reinforcement"
-                element={
-                  <FormworkCalc
-                    title={t('calc.soffit_reinforcement')}
-                    entryType="slab"
-                    entryLabel={t('calc.soffit_reinforcement')}
-                    outputKey="soffit_m2"
-                  />
-                }
+                element={<SoffitCalc />}
               />
               <Route path="/history" element={<HistoryView />} />
               <Route path="/about" element={<AboutView />} />

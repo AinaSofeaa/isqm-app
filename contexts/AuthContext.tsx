@@ -109,7 +109,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!cancelled) setProfile(data);
       })
       .catch((err) => {
-        console.warn('Failed to load profile', err);
+        console.error('Failed to load profile', err);
         if (!cancelled) setProfile(null);
       })
       .finally(() => {
@@ -133,7 +133,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setProfile(data);
       return data;
     } catch (err) {
-      console.warn('Failed to refresh profile', err);
+      console.error('Failed to refresh profile', err);
       setProfile(null);
       throw err;
     } finally {

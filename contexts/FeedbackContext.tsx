@@ -5,6 +5,9 @@ type FeedbackPayload = {
   variant: FeedbackVariant;
   title: string;
   message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  onConfirm?: () => void;
 };
 
 type FeedbackContextValue = {
@@ -12,6 +15,13 @@ type FeedbackContextValue = {
   showSuccess: (title: string, message: string) => void;
   showError: (title: string, message: string) => void;
   showInfo: (title: string, message: string) => void;
+  showConfirm: (
+    title: string,
+    message: string,
+    confirmLabel: string,
+    cancelLabel: string,
+    onConfirm: () => void
+  ) => void;
   close: () => void;
 };
 
@@ -38,13 +48,24 @@ export const FeedbackProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     show({ variant: 'info', title, message });
   }, [show]);
 
+  const showConfirm = useCallback((
+    title: string,
+    message: string,
+    confirmLabel: string,
+    cancelLabel: string,
+    onConfirm: () => void
+  ) => {
+    show({ variant: 'info', title, message, confirmLabel, cancelLabel, onConfirm });
+  }, [show]);
+
   const value = useMemo<FeedbackContextValue>(() => ({
     show,
     showSuccess,
     showError,
     showInfo,
+    showConfirm,
     close,
-  }), [show, showSuccess, showError, showInfo, close]);
+  }), [show, showSuccess, showError, showInfo, showConfirm, close]);
 
   return (
     <FeedbackContext.Provider value={value}>
@@ -54,6 +75,9 @@ export const FeedbackProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         variant={payload?.variant ?? 'info'}
         title={payload?.title ?? ''}
         message={payload?.message ?? ''}
+        confirmLabel={payload?.confirmLabel}
+        cancelLabel={payload?.cancelLabel}
+        onConfirm={payload?.onConfirm}
         onClose={close}
       />
     </FeedbackContext.Provider>
