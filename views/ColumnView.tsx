@@ -5,6 +5,8 @@ import { saveResultRemote } from '../services/historyService';
 import { getFieldState } from '../lib/fieldState';
 import QMField from '../components/QMField';
 import { useI18n } from '../src/i18n/I18nContext';
+import { formatSupabaseError } from '../lib/formatSupabaseError';
+import { useFeedback } from '../contexts/FeedbackContext';
 
 type ColumnForm = {
   b: string;
@@ -57,8 +59,7 @@ const ColumnView: React.FC = () => {
   const [submitted, setSubmitted] = useState(false);
   const [result, setResult] = useState<ColumnQMResult | null>(null);
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<{ key: string } | null>(null);
-  const [saved, setSaved] = useState(false);
+  const { showSuccess, showError } = useFeedback();
 
   const validatePositive = (value: string) => {
     if (!value.trim()) return t('calc.validationRequired');
@@ -107,6 +108,10 @@ const ColumnView: React.FC = () => {
 
   const hasErrors = Object.values(errors).some((err) => !!err);
 
+  const showValidation = () => {
+    showError(t('modal.validationTitle'), t('modal.validationMsg'));
+  };
+
   const buildInputs = (): ColumnInputs => ({
     b: parseNumber(form.b),
     l: parseNumber(form.l),
@@ -132,14 +137,18 @@ const ColumnView: React.FC = () => {
   };
 
   const handleCalculate = () => {
-    setSaveError(null);
-    computeResult();
+    const computed = computeResult();
+    if (!computed) {
+      showValidation();
+    }
   };
 
   const handleSave = async () => {
-    setSaveError(null);
     const computed = computeResult();
-    if (!computed) return;
+    if (!computed) {
+      showValidation();
+      return;
+    }
 
     setSaving(true);
     try {
@@ -169,13 +178,10 @@ const ColumnView: React.FC = () => {
         result: output.steel_total_kg,
         unit: 'kg',
       });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      showSuccess(t('modal.saveSuccessTitle'), t('modal.saveSuccessMsg'));
     } catch (err: any) {
-      const message = String(err?.message ?? '');
-      setSaveError({
-        key: message.includes('outputs jsonb') ? 'common.dbMigrationRequired' : 'common.saveFailed',
-      });
+      const reason = formatSupabaseError(err, t('common.errorTryAgain'));
+      showError(t('modal.saveFailTitle'), t('modal.saveFailMsg', { error: reason }));
     } finally {
       setSaving(false);
     }
@@ -368,11 +374,6 @@ const ColumnView: React.FC = () => {
           </div>
         </div>
 
-        {saveError && (
-          <div className="text-sm font-semibold text-red-600 bg-red-50 border border-red-100 p-3 rounded-2xl">
-            {t(saveError.key)}
-          </div>
-        )}
 
         <button
           type="button"
@@ -384,11 +385,7 @@ const ColumnView: React.FC = () => {
               : 'bg-slate-200 text-slate-400 cursor-not-allowed'
           }`}
         >
-          {saved ? (
-            <span className="inline-flex items-center gap-2"><Save size={18} /> {t('common.saved')}</span>
-          ) : (
-            <span className="inline-flex items-center gap-2"><Save size={18} /> {t('common.save')}</span>
-          )}
+          <span className="inline-flex items-center gap-2"><Save size={18} /> {t('common.save')}</span>
         </button>
       </section>
     </div>

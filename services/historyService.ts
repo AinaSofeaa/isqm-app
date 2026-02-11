@@ -12,6 +12,9 @@ export type HistoryFilters = {
 const OUTPUTS_MISSING_MESSAGE = 'DB migration required: add outputs jsonb';
 
 let outputsColumnAvailable: boolean | null = null;
+let lastHistoryError: Error | null = null;
+
+export const getHistoryRemoteError = () => lastHistoryError;
 
 const isMissingColumnError = (error: any, column: string) => {
   const message = String(error?.message ?? '').toLowerCase();
@@ -58,16 +61,22 @@ export const saveResultRemote = async (entry: SaveEntry) => {
 
   await ensureOutputsColumn();
 
+  const inputs = entry.inputs && typeof entry.inputs === 'object' ? entry.inputs : {};
+  const outputs = entry.outputs && typeof entry.outputs === 'object' ? entry.outputs : {};
+  const label = String(entry.label ?? '').trim() || 'Calculation';
+  const unit = String(entry.unit ?? '').trim() || 'unit';
+  const resultValue = entry.result === null || entry.result === undefined ? null : String(entry.result);
+
   const { data, error } = await supabase
     .from('calculations')
     .insert({
       user_id: uid,
       type: entry.type,
-      label: entry.label,
-      inputs: entry.inputs,
-      outputs: entry.outputs ?? {},
-      result: entry.result,
-      unit: entry.unit,
+      label,
+      inputs,
+      outputs,
+      result: resultValue,
+      unit,
     })
     .select()
     .single();
@@ -82,46 +91,58 @@ export const saveResultRemote = async (entry: SaveEntry) => {
 };
 
 export const getHistoryRemote = async (filters?: HistoryFilters): Promise<SavedResult[]> => {
-  const { data: auth } = await supabase.auth.getUser();
-  const uid = auth.user?.id;
-  if (!uid) throw new Error('Not signed in');
+  lastHistoryError = null;
+  try {
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth.user?.id;
+    if (!uid) throw new Error('Not signed in');
 
-  let query = supabase
-    .from('calculations')
-    .select('id,type,label,inputs,outputs,result,unit,created_at')
-    .eq('user_id', uid)
-    .order('created_at', { ascending: false });
+    let query = supabase
+      .from('calculations')
+      .select('id,type,label,inputs,outputs,result,unit,created_at')
+      .eq('user_id', uid)
+      .order('created_at', { ascending: false });
 
-  if (filters?.type && filters.type !== 'all') {
-    query = query.eq('type', filters.type);
-  }
-  const fromIso = toIsoStart(filters?.fromDate);
-  const toIso = toIsoEnd(filters?.toDate);
-  if (fromIso) {
-    query = query.gte('created_at', fromIso);
-  }
-  if (toIso) {
-    query = query.lte('created_at', toIso);
-  }
-
-  const { data, error } = await query;
-  if (error) {
-    if (isMissingColumnError(error, 'outputs')) {
-      throw new Error(OUTPUTS_MISSING_MESSAGE);
+    if (filters?.type && filters.type !== 'all') {
+      query = query.eq('type', filters.type);
     }
-    throw error;
-  }
+    const fromIso = toIsoStart(filters?.fromDate);
+    const toIso = toIsoEnd(filters?.toDate);
+    if (fromIso) {
+      query = query.gte('created_at', fromIso);
+    }
+    if (toIso) {
+      query = query.lte('created_at', toIso);
+    }
 
-  return (data as any[]).map((row) => ({
-    id: row.id,
-    type: row.type as any,
-    label: row.label,
-    inputs: row.inputs ?? {},
-    outputs: row.outputs ?? {},
-    result: row.result,
-    unit: row.unit,
-    timestamp: new Date(row.created_at).getTime(),
-  }));
+    const { data, error } = await query;
+    if (error) {
+      if (isMissingColumnError(error, 'outputs')) {
+        throw new Error(OUTPUTS_MISSING_MESSAGE);
+      }
+      throw error;
+    }
+
+    return (data as any[]).map((row) => {
+      const rawResult = row.result;
+      const parsedResult = typeof rawResult === 'number' ? rawResult : Number(rawResult);
+      const result = Number.isFinite(parsedResult) ? parsedResult : Number.NaN;
+      return ({
+        id: row.id,
+        type: row.type as any,
+        label: row.label,
+        inputs: row.inputs ?? {},
+        outputs: row.outputs ?? {},
+        result,
+        unit: row.unit,
+        timestamp: new Date(row.created_at).getTime(),
+      });
+    });
+  } catch (error: any) {
+    lastHistoryError = error instanceof Error ? error : new Error('Failed to load history');
+    console.warn('Failed to load history', error);
+    return [];
+  }
 };
 
 export const deleteHistoryRemote = async (id: string) => {

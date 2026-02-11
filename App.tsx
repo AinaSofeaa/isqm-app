@@ -3,9 +3,6 @@ import React, { useState } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import { 
   Home, 
-  Layers, 
-  Maximize,
-  Columns, 
   History as HistoryIcon, 
   Info, 
   ChevronLeft,
@@ -15,9 +12,11 @@ import {
 } from 'lucide-react';
 
 import Dashboard from './views/Dashboard';
-import BeamView from './views/BeamView';
-import ColumnView from './views/ColumnView';
-import SlabView from './views/SlabView';
+import BeamMenuView from './views/BeamMenuView';
+import ColumnMenuView from './views/ColumnMenuView';
+import SlabMenuView from './views/SlabMenuView';
+import ConcreteCalc from './views/ConcreteCalc';
+import FormworkCalc from './views/FormworkCalc';
 import HistoryView from './views/HistoryView';
 import AboutView from './views/AboutView';
 import AuthView from './views/AuthView';
@@ -32,24 +31,36 @@ const Header: React.FC = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { t } = useI18n();
+  const path = location.pathname;
   const [logoutError, setLogoutError] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [logoutBusy, setLogoutBusy] = useState(false);
   const getTitle = () => {
-    switch (location.pathname) {
-      case '/': return t('nav.dashboardTitle');
-      case '/beam': return t('nav.beamTitle');
-      case '/column': return t('nav.columnTitle');
-      case '/slab': return t('nav.slabTitle');
-      case '/history': return t('nav.historyTitle');
-      case '/about': return t('nav.aboutTitle');
-      case '/profile': return t('nav.profileTitle');
-      default: return t('nav.appTitle');
-    }
+    if (path === '/') return t('nav.dashboardTitle');
+    if (path === '/beam') return t('flow.beamTitle');
+    if (path === '/column') return t('flow.columnTitle');
+    if (path === '/slab') return t('flow.slabTitle');
+    if (path.endsWith('/konkrit')) return t('calc.concrete');
+    if (path.endsWith('/kotak-acuan')) return t('calc.formwork');
+    if (path.endsWith('/soffit-reinforcement')) return t('calc.soffit_reinforcement');
+    if (path === '/history') return t('nav.historyTitle');
+    if (path === '/about') return t('nav.aboutTitle');
+    if (path === '/profile') return t('nav.profileTitle');
+    return t('nav.appTitle');
   };
 
-  const isHome = location.pathname === '/';
-  const isAuth = location.pathname === '/login';
+  const getBackPath = () => {
+    if (path === '/' || path === '/login') return null;
+    if (path.startsWith('/beam/')) return '/beam';
+    if (path.startsWith('/column/')) return '/column';
+    if (path.startsWith('/slab/')) return '/slab';
+    if (path === '/beam' || path === '/column' || path === '/slab') return '/';
+    return '/';
+  };
+
+  const backPath = getBackPath();
+  const isHome = path === '/';
+  const isAuth = path === '/login';
 
   const handleLogout = async () => {
     setLogoutError(false);
@@ -69,8 +80,8 @@ const Header: React.FC = () => {
     <header className="sticky top-0 z-50 bg-blue-700 text-white px-4 py-4 shadow-md flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          {!isHome && (
-            <Link to="/" className="p-1 hover:bg-blue-600 rounded-full transition-colors">
+          {backPath && (
+            <Link to={backPath} className="p-1 hover:bg-blue-600 rounded-full transition-colors">
               <ChevronLeft size={24} />
             </Link>
           )}
@@ -122,7 +133,10 @@ const Header: React.FC = () => {
 const BottomNav: React.FC = () => {
   const location = useLocation();
   const { t } = useI18n();
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) => {
+    if (path === '/') return location.pathname === '/';
+    return location.pathname === path || location.pathname.startsWith(`${path}/`);
+  };
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around py-3 px-2 safe-area-bottom z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
@@ -130,21 +144,17 @@ const BottomNav: React.FC = () => {
         <Home size={22} />
         <span className="text-[10px] font-medium uppercase tracking-wider">{t('nav.home')}</span>
       </Link>
-      <Link to="/column" className={`flex flex-col items-center gap-1 ${isActive('/column') ? 'text-blue-600' : 'text-slate-400'}`}>
-        <Columns size={22} />
-        <span className="text-[10px] font-medium uppercase tracking-wider">{t('nav.column')}</span>
-      </Link>
-      <Link to="/beam" className={`flex flex-col items-center gap-1 ${isActive('/beam') ? 'text-blue-600' : 'text-slate-400'}`}>
-        <Maximize size={22} />
-        <span className="text-[10px] font-medium uppercase tracking-wider">{t('nav.beam')}</span>
-      </Link>
-      <Link to="/slab" className={`flex flex-col items-center gap-1 ${isActive('/slab') ? 'text-blue-600' : 'text-slate-400'}`}>
-        <Layers size={22} />
-        <span className="text-[10px] font-medium uppercase tracking-wider">{t('nav.slab')}</span>
-      </Link>
       <Link to="/history" className={`flex flex-col items-center gap-1 ${isActive('/history') ? 'text-blue-600' : 'text-slate-400'}`}>
         <HistoryIcon size={22} />
         <span className="text-[10px] font-medium uppercase tracking-wider">{t('nav.history')}</span>
+      </Link>
+      <Link to="/about" className={`flex flex-col items-center gap-1 ${isActive('/about') ? 'text-blue-600' : 'text-slate-400'}`}>
+        <Info size={22} />
+        <span className="text-[10px] font-medium uppercase tracking-wider">{t('nav.info')}</span>
+      </Link>
+      <Link to="/profile" className={`flex flex-col items-center gap-1 ${isActive('/profile') ? 'text-blue-600' : 'text-slate-400'}`}>
+        <UserIcon size={22} />
+        <span className="text-[10px] font-medium uppercase tracking-wider">{t('nav.profile')}</span>
       </Link>
     </nav>
   );
@@ -176,9 +186,44 @@ const App: React.FC = () => {
           <main className="flex-1 pb-24 overflow-y-auto">
             <Routes>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/beam" element={<BeamView />} />
-              <Route path="/column" element={<ColumnView />} />
-              <Route path="/slab" element={<SlabView />} />
+              <Route path="/beam" element={<BeamMenuView />} />
+              <Route
+                path="/beam/konkrit"
+                element={<ConcreteCalc entryType="beam" entryLabel={t('legacy.concrete.title')} outputKey="concrete_m3" />}
+              />
+              <Route
+                path="/beam/kotak-acuan"
+                element={<FormworkCalc entryType="beam" entryLabel={t('legacy.formwork.title')} outputKey="formwork_m2" />}
+              />
+              <Route path="/column" element={<ColumnMenuView />} />
+              <Route
+                path="/column/konkrit"
+                element={<ConcreteCalc entryType="column" entryLabel={t('legacy.concrete.title')} outputKey="concrete_m3" />}
+              />
+              <Route
+                path="/column/kotak-acuan"
+                element={<FormworkCalc entryType="column" entryLabel={t('legacy.formwork.title')} outputKey="formwork_m2" />}
+              />
+              <Route path="/slab" element={<SlabMenuView />} />
+              <Route
+                path="/slab/konkrit"
+                element={<ConcreteCalc entryType="slab" entryLabel={t('legacy.concrete.title')} outputKey="concrete_m3" />}
+              />
+              <Route
+                path="/slab/kotak-acuan"
+                element={<FormworkCalc entryType="slab" entryLabel={t('legacy.formwork.title')} outputKey="formwork_m2" />}
+              />
+              <Route
+                path="/slab/soffit-reinforcement"
+                element={
+                  <FormworkCalc
+                    title={t('calc.soffit_reinforcement')}
+                    entryType="slab"
+                    entryLabel={t('calc.soffit_reinforcement')}
+                    outputKey="soffit_m2"
+                  />
+                }
+              />
               <Route path="/history" element={<HistoryView />} />
               <Route path="/about" element={<AboutView />} />
               <Route path="/profile" element={<ProfileView />} />

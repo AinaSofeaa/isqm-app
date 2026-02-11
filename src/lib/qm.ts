@@ -54,8 +54,8 @@ export type SlabInputs = {
 export type SlabQMResult = {
   concrete_m3: number;
   formwork_m2: number;
-  steel_kg: number;
-  bars_qty: number;
+  soffit_m2: number;
+  form_to_side_m2: number;
 };
 
 export const calcBeamQM = (input: BeamInputs): BeamQMResult => {
@@ -63,7 +63,7 @@ export const calcBeamQM = (input: BeamInputs): BeamQMResult => {
   const h = toNumber(input.h);
   const L = toNumber(input.L);
   const concrete_m3 = b * h * L;
-  const formwork_m2 = (2 * h * L) + (b * L);
+  const formwork_m2 = (2 * h + b) * L;
   const steel_kg = barWeightKg(input.barDiameterMm, input.barLengthM, input.barQuantity);
   return { concrete_m3, formwork_m2, steel_kg };
 };
@@ -101,15 +101,13 @@ export const calcSlabQM = (input: SlabInputs): SlabQMResult => {
   const thickness = toNumber(input.thickness);
   const concrete_m3 = length * width * thickness;
   const formwork_m2 = length * width;
-
-  const spacing_m = mmToM(input.spacingMm);
-  const bars_qty = spacing_m > 0 ? width / spacing_m : 0;
-  const steel_kg = barWeightKg(input.barDiameterMm, input.barLengthM, bars_qty);
+  const soffit_m2 = 2 * (length + width) * thickness;
+  const form_to_side_m2 = 2 * length * thickness;
 
   return {
     concrete_m3,
     formwork_m2,
-    steel_kg,
-    bars_qty,
+    soffit_m2,
+    form_to_side_m2,
   };
 };

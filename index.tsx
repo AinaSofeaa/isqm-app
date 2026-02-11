@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css'; // This connects the styling
 import { AuthProvider } from './contexts/AuthContext';
+import { FeedbackProvider } from './contexts/FeedbackContext';
 import { I18nProvider } from './src/i18n/I18nContext';
 
 const rootElement = document.getElementById('root');
@@ -15,9 +16,11 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
     <I18nProvider>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
+      <FeedbackProvider>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </FeedbackProvider>
     </I18nProvider>
   </React.StrictMode>
 );

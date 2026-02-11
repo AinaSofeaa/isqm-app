@@ -246,14 +246,10 @@ const ProfileView: React.FC = () => {
   return (
     <div className="p-4 space-y-6">
       <section className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
-        <div className="flex items-start gap-4">
-          <div className="bg-blue-100 p-3 rounded-2xl text-blue-600">
-            <UserIcon size={22} />
-          </div>
-          <div>
-            <h2 className="text-lg font-black text-slate-800">{t('profile.title')}</h2>
-            <p className="text-xs text-slate-400">{t('profile.subtitle')}</p>
-          </div>
+        {/* TODO: re-enable profile photo upload + display (Supabase Storage). */}
+        <div>
+          <h2 className="text-lg font-black text-slate-800">{t('profile.title')}</h2>
+          <p className="text-xs text-slate-400">{t('profile.subtitle')}</p>
         </div>
       </section>
 

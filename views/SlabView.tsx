@@ -5,6 +5,8 @@ import { saveResultRemote } from '../services/historyService';
 import { getFieldState } from '../lib/fieldState';
 import QMField from '../components/QMField';
 import { useI18n } from '../src/i18n/I18nContext';
+import { formatSupabaseError } from '../lib/formatSupabaseError';
+import { useFeedback } from '../contexts/FeedbackContext';
 
 type SlabForm = {
   length: string;
@@ -48,8 +50,7 @@ const SlabView: React.FC = () => {
   const [submitted, setSubmitted] = useState(false);
   const [result, setResult] = useState<SlabQMResult | null>(null);
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<{ key: string } | null>(null);
-  const [saved, setSaved] = useState(false);
+  const { showSuccess, showError } = useFeedback();
 
   const validatePositive = (value: string) => {
     if (!value.trim()) return t('calc.validationRequired');
@@ -68,8 +69,8 @@ const SlabView: React.FC = () => {
     length: validatePositive(form.length),
     width: validatePositive(form.width),
     thickness: validatePositive(form.thickness),
-    barDiameter: validatePositive(form.barDiameter),
-    spacing: validatePositive(form.spacing),
+    barDiameter: validateOptionalPositive(form.barDiameter),
+    spacing: validateOptionalPositive(form.spacing),
     barLength: validateOptionalPositive(form.barLength),
   }), [form, t]);
 
@@ -77,12 +78,16 @@ const SlabView: React.FC = () => {
     length: getFieldState({ value: form.length, validator: validatePositive, touched: touched.length, submitted }),
     width: getFieldState({ value: form.width, validator: validatePositive, touched: touched.width, submitted }),
     thickness: getFieldState({ value: form.thickness, validator: validatePositive, touched: touched.thickness, submitted }),
-    barDiameter: getFieldState({ value: form.barDiameter, validator: validatePositive, touched: touched.barDiameter, submitted }),
-    spacing: getFieldState({ value: form.spacing, validator: validatePositive, touched: touched.spacing, submitted }),
+    barDiameter: getFieldState({ value: form.barDiameter, validator: validateOptionalPositive, touched: touched.barDiameter, submitted }),
+    spacing: getFieldState({ value: form.spacing, validator: validateOptionalPositive, touched: touched.spacing, submitted }),
     barLength: getFieldState({ value: form.barLength, validator: validateOptionalPositive, touched: touched.barLength, submitted }),
   };
 
   const hasErrors = Object.values(errors).some((err) => !!err);
+
+  const showValidation = () => {
+    showError(t('modal.validationTitle'), t('modal.validationMsg'));
+  };
 
   const buildInputs = (): SlabInputs => {
     const length = parseNumber(form.length);
@@ -110,14 +115,18 @@ const SlabView: React.FC = () => {
   };
 
   const handleCalculate = () => {
-    setSaveError(null);
-    computeResult();
+    const computed = computeResult();
+    if (!computed) {
+      showValidation();
+    }
   };
 
   const handleSave = async () => {
-    setSaveError(null);
     const computed = computeResult();
-    if (!computed) return;
+    if (!computed) {
+      showValidation();
+      return;
+    }
 
     setSaving(true);
     try {
@@ -136,19 +145,16 @@ const SlabView: React.FC = () => {
         outputs: {
           concrete_m3: output.concrete_m3,
           formwork_m2: output.formwork_m2,
-          steel_kg: output.steel_kg,
-          bars_qty: output.bars_qty,
+          soffit_m2: output.soffit_m2,
+          form_to_side_m2: output.form_to_side_m2,
         },
-        result: output.steel_kg,
-        unit: 'kg',
+        result: output.soffit_m2,
+        unit: 'm2',
       });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      showSuccess(t('modal.saveSuccessTitle'), t('modal.saveSuccessMsg'));
     } catch (err: any) {
-      const message = String(err?.message ?? '');
-      setSaveError({
-        key: message.includes('outputs jsonb') ? 'common.dbMigrationRequired' : 'common.saveFailed',
-      });
+      const reason = formatSupabaseError(err, t('common.errorTryAgain'));
+      showError(t('modal.saveFailTitle'), t('modal.saveFailMsg', { error: reason }));
     } finally {
       setSaving(false);
     }
@@ -211,7 +217,7 @@ const SlabView: React.FC = () => {
             onChange={(value) => setForm((prev) => ({ ...prev, barDiameter: value }))}
             onBlur={() => setTouched((prev) => ({ ...prev, barDiameter: true }))}
             unit="mm"
-            helperText={t('common.requiredHint')}
+            helperText={t('common.optional')}
             errorMessage={errors.barDiameter}
             showError={states.barDiameter.showError}
             showSuccess={states.barDiameter.showSuccess}
@@ -222,7 +228,7 @@ const SlabView: React.FC = () => {
             onChange={(value) => setForm((prev) => ({ ...prev, spacing: value }))}
             onBlur={() => setTouched((prev) => ({ ...prev, spacing: true }))}
             unit="mm"
-            helperText={t('common.requiredHint')}
+            helperText={t('common.optional')}
             errorMessage={errors.spacing}
             showError={states.spacing.showError}
             showSuccess={states.spacing.showSuccess}
@@ -274,21 +280,16 @@ const SlabView: React.FC = () => {
 
         <div className="flex items-center gap-2 text-slate-700 font-semibold">
           <Grid3X3 size={16} className="text-orange-500" />
-          {t('calc.reinforcementTitle')}
+          {t('calc.soffit_reinforcement')}
         </div>
         <div className="text-2xl font-black text-orange-600">
-          {formatNumber(result?.steel_kg ?? null, 2)} kg
+          {formatNumber(result?.soffit_m2 ?? null, 3)} m2
         </div>
         <p className="text-xs text-slate-400">{t('calc.formulaSlabSteel')}</p>
         <div className="text-xs font-semibold text-slate-500">
-          {t('calc.barsQtyLabel')}: {formatNumber(result?.bars_qty ?? null, 2)}
+          {t('calc.barsQtyLabel')}: {formatNumber(result?.form_to_side_m2 ?? null, 3)} m2
         </div>
 
-        {saveError && (
-          <div className="text-sm font-semibold text-red-600 bg-red-50 border border-red-100 p-3 rounded-2xl">
-            {t(saveError.key)}
-          </div>
-        )}
 
         <button
           type="button"
@@ -300,11 +301,7 @@ const SlabView: React.FC = () => {
               : 'bg-slate-200 text-slate-400 cursor-not-allowed'
           }`}
         >
-          {saved ? (
-            <span className="inline-flex items-center gap-2"><Save size={18} /> {t('common.saved')}</span>
-          ) : (
-            <span className="inline-flex items-center gap-2"><Save size={18} /> {t('common.save')}</span>
-          )}
+          <span className="inline-flex items-center gap-2"><Save size={18} /> {t('common.save')}</span>
         </button>
       </section>
     </div>

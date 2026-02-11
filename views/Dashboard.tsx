@@ -125,9 +125,14 @@ const Dashboard: React.FC = () => {
           <Clock size={24} className="text-yellow-700" />
         </div>
         <div>
-          <h4 className="font-bold text-slate-800">{t('dashboard.quickTipTitle')}</h4>
+          <h4 className="font-bold text-slate-800">{t('guide.title')}</h4>
           <p className="text-slate-600 text-sm mt-1">
-            {t('dashboard.quickTipBody')}
+            {t('guide.step1')}<br />
+            {t('guide.step2')}<br />
+            {t('guide.step3')}<br />
+            {t('guide.step4')}<br />
+            {t('guide.step5')}<br />
+            {t('guide.step6')}
           </p>
         </div>
       </section>

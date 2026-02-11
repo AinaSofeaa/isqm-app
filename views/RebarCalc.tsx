@@ -4,6 +4,8 @@ import CalcField from '../components/CalcField';
 import { RotateCcw, Save, Grid } from 'lucide-react';
 import { saveResultRemote } from '../services/historyService';
 import { useI18n } from '../src/i18n/I18nContext';
+import { formatSupabaseError } from '../lib/formatSupabaseError';
+import { useFeedback } from '../contexts/FeedbackContext';
 
 const RebarCalc: React.FC = () => {
   const { t } = useI18n();
@@ -11,7 +13,7 @@ const RebarCalc: React.FC = () => {
   const [spacing, setSpacing] = useState('');
   const [quantity, setQuantity] = useState<number>(0);
   const [roundedQuantity, setRoundedQuantity] = useState<number>(0);
-  const [showSaved, setShowSaved] = useState(false);
+  const { showSuccess, showError } = useFeedback();
 
   useEffect(() => {
     const l = parseFloat(areaLength) || 0;
@@ -27,13 +29,20 @@ const RebarCalc: React.FC = () => {
     }
   }, [areaLength, spacing]);
 
+  const showValidation = () => {
+    showError(t('modal.validationTitle'), t('modal.validationMsg'));
+  };
+
   const handleReset = () => {
     setAreaLength('');
     setSpacing('');
   };
 
   const handleSave = async () => {
-    if (quantity <= 0) return;
+    if (quantity <= 0) {
+      showValidation();
+      return;
+    }
     try {
       await saveResultRemote({
         type: 'rebar',
@@ -42,11 +51,10 @@ const RebarCalc: React.FC = () => {
         result: roundedQuantity,
         unit: 'pcs'
       });
-      setShowSaved(true);
-      setTimeout(() => setShowSaved(false), 2000);
+      showSuccess(t('modal.saveSuccessTitle'), t('modal.saveSuccessMsg'));
     } catch (e: any) {
-      const message = String(e?.message ?? '');
-      alert(message.includes('outputs jsonb') ? t('common.dbMigrationRequired') : t('common.saveFailed'));
+      const reason = formatSupabaseError(e, t('common.errorTryAgain'));
+      showError(t('modal.saveFailTitle'), t('modal.saveFailMsg', { error: reason }));
     }
   };
 
@@ -98,7 +106,7 @@ const RebarCalc: React.FC = () => {
                   : 'bg-slate-300 text-slate-100 cursor-not-allowed'
               }`}
             >
-              {showSaved ? t('common.saved') : <><Save size={18} /> {t('common.save')}</>}
+              <><Save size={18} /> {t('common.save')}</>
             </button>
           </div>
         </div>

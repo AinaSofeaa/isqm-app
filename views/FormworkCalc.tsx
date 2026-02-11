@@ -4,14 +4,30 @@ import CalcField from '../components/CalcField';
 import { RotateCcw, Save, LayoutTemplate } from 'lucide-react';
 import { saveResultRemote } from '../services/historyService';
 import { useI18n } from '../src/i18n/I18nContext';
+import type { CalculationType } from '../types';
+import { formatSupabaseError } from '../lib/formatSupabaseError';
+import { useFeedback } from '../contexts/FeedbackContext';
 
-const FormworkCalc: React.FC = () => {
+type FormworkCalcProps = {
+  title?: string;
+  formula?: string;
+  entryType?: CalculationType;
+  entryLabel?: string;
+  outputKey?: string;
+};
+
+const FormworkCalc: React.FC<FormworkCalcProps> = ({ title, formula, entryType, entryLabel, outputKey }) => {
   const { t } = useI18n();
+  const resolvedTitle = title ?? t('calc.formwork');
+  const resolvedFormula = formula ?? t('legacy.formwork.formula');
+  const resolvedLabel = entryLabel ?? resolvedTitle;
+  const resolvedType = entryType ?? 'formwork';
+  const resolvedOutputKey = outputKey ?? 'formwork_m2';
   const [length, setLength] = useState('');
   const [height, setHeight] = useState('');
   const [sides, setSides] = useState('1');
   const [area, setArea] = useState<number>(0);
-  const [showSaved, setShowSaved] = useState(false);
+  const { showSuccess, showError } = useFeedback();
 
   useEffect(() => {
     const l = parseFloat(length) || 0;
@@ -20,6 +36,10 @@ const FormworkCalc: React.FC = () => {
     setArea(l * h * s);
   }, [length, height, sides]);
 
+  const showValidation = () => {
+    showError(t('modal.validationTitle'), t('modal.validationMsg'));
+  };
+
   const handleReset = () => {
     setLength('');
     setHeight('');
@@ -27,20 +47,24 @@ const FormworkCalc: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (area <= 0) return;
+    if (area <= 0) {
+      showValidation();
+      return;
+    }
     try {
+      const outputs = resolvedOutputKey ? { [resolvedOutputKey]: area } : undefined;
       await saveResultRemote({
-        type: 'formwork',
-        label: 'Formwork Shuttering',
+        type: resolvedType,
+        label: resolvedLabel,
         inputs: { length: parseFloat(length), height: parseFloat(height), sides: parseFloat(sides) },
+        outputs,
         result: area,
         unit: 'm²'
       });
-      setShowSaved(true);
-      setTimeout(() => setShowSaved(false), 2000);
+      showSuccess(t('modal.saveSuccessTitle'), t('modal.saveSuccessMsg'));
     } catch (e: any) {
-      const message = String(e?.message ?? '');
-      alert(message.includes('outputs jsonb') ? t('common.dbMigrationRequired') : t('common.saveFailed'));
+      const reason = formatSupabaseError(e, t('common.errorTryAgain'));
+      showError(t('modal.saveFailTitle'), t('modal.saveFailMsg', { error: reason }));
     }
   };
 
@@ -52,8 +76,8 @@ const FormworkCalc: React.FC = () => {
             <LayoutTemplate size={20} />
           </div>
           <div>
-            <h2 className="font-bold text-slate-800">{t('legacy.formwork.title')}</h2>
-            <p className="text-xs text-slate-400">{t('legacy.formwork.formula')}</p>
+            <h2 className="font-bold text-slate-800">{resolvedTitle}</h2>
+            <p className="text-xs text-slate-400">{resolvedFormula}</p>
           </div>
         </header>
 
@@ -87,7 +111,7 @@ const FormworkCalc: React.FC = () => {
                   : 'bg-slate-300 text-slate-100 cursor-not-allowed'
               }`}
             >
-              {showSaved ? t('common.saved') : <><Save size={18} /> {t('common.save')}</>}
+              <><Save size={18} /> {t('common.save')}</>
             </button>
           </div>
         </div>
@@ -104,5 +128,6 @@ const FormworkCalc: React.FC = () => {
 };
 
 export default FormworkCalc;
+
 
 
