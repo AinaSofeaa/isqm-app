@@ -1,53 +1,5 @@
--- ISQM-App: Supabase schema + RLS policies
+-- Profiles, institutions, RLS, and signup trigger
 
--- 1) Table
-create table if not exists public.calculations (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users (id) on delete cascade,
-  type text not null check (type in ('beam','column','slab','concrete','formwork','rebar')),
-  label text not null,
-  inputs jsonb not null default '{}'::jsonb,
-  outputs jsonb not null default '{}'::jsonb,
-  result double precision not null,
-  unit text not null,
-  created_at timestamptz not null default now()
-);
-
-alter table public.calculations add column if not exists outputs jsonb not null default '{}'::jsonb;
-alter table public.calculations drop constraint if exists calculations_type_check;
-alter table public.calculations add constraint calculations_type_check
-  check (type in ('beam','column','slab','concrete','formwork','rebar'));
-
--- Helpful index for listing by user
-create index if not exists calculations_user_id_created_at_idx
-  on public.calculations (user_id, created_at desc);
-
--- 2) Row Level Security
-alter table public.calculations enable row level security;
-
--- 3) Policies
-drop policy if exists "Users can read their own calculations" on public.calculations;
-create policy "Users can read their own calculations"
-  on public.calculations
-  for select
-  to authenticated
-  using (auth.uid() = user_id);
-
-drop policy if exists "Users can insert their own calculations" on public.calculations;
-create policy "Users can insert their own calculations"
-  on public.calculations
-  for insert
-  to authenticated
-  with check (auth.uid() = user_id);
-
-drop policy if exists "Users can delete their own calculations" on public.calculations;
-create policy "Users can delete their own calculations"
-  on public.calculations
-  for delete
-  to authenticated
-  using (auth.uid() = user_id);
-
--- 4) Institutions table
 create table if not exists public.institutions (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
@@ -55,7 +7,6 @@ create table if not exists public.institutions (
   state text null
 );
 
--- 5) Institutions RLS
 alter table public.institutions enable row level security;
 
 drop policy if exists "Authenticated can read institutions" on public.institutions;
@@ -66,7 +17,6 @@ create policy "Public can read institutions"
   to anon, authenticated
   using (true);
 
--- 6) Profiles table
 create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   full_name text null,
@@ -80,7 +30,6 @@ create table if not exists public.profiles (
   updated_at timestamptz not null default now()
 );
 
--- Ensure expected columns exist when table already created
 alter table public.profiles add column if not exists full_name text null;
 alter table public.profiles add column if not exists role text null;
 alter table public.profiles add column if not exists institution text null;
@@ -91,10 +40,8 @@ alter table public.profiles add column if not exists phone text null;
 alter table public.profiles add column if not exists created_at timestamptz not null default now();
 alter table public.profiles add column if not exists updated_at timestamptz not null default now();
 
--- 7) Row Level Security
 alter table public.profiles enable row level security;
 
--- 8) Policies
 drop policy if exists "Users can read their own profile" on public.profiles;
 create policy "Users can read their own profile"
   on public.profiles
@@ -117,7 +64,6 @@ create policy "Users can update their own profile"
   using (auth.uid() = id)
   with check (auth.uid() = id);
 
--- 9) Create profile row on signup
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -176,6 +122,7 @@ begin
       user_type = coalesce(public.profiles.user_type, excluded.user_type),
       institution_id = coalesce(public.profiles.institution_id, excluded.institution_id),
       company_name = coalesce(public.profiles.company_name, excluded.company_name);
+
   return new;
 end;
 $$;
@@ -185,7 +132,6 @@ create trigger on_auth_user_created
 after insert on auth.users
 for each row execute procedure public.handle_new_user();
 
--- 10) Keep updated_at in sync
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql

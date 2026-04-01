@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Columns, Layers } from 'lucide-react';
+import { Calculator, Columns, Grid3X3, Layers } from 'lucide-react';
 import { useI18n } from '../src/i18n/I18nContext';
 
 const ColumnMenuView: React.FC = () => {
@@ -19,6 +19,24 @@ const ColumnMenuView: React.FC = () => {
       icon: <Layers size={28} className="text-blue-600" />,
       path: '/column/kotak-acuan',
       color: 'bg-blue-50',
+    },
+    {
+      title: t('calc.mainBars'),
+      icon: <Grid3X3 size={28} className="text-orange-600" />,
+      path: '/column/main-bars',
+      color: 'bg-orange-50',
+    },
+    {
+      title: t('calc.links'),
+      icon: <Grid3X3 size={28} className="text-amber-600" />,
+      path: '/column/links',
+      color: 'bg-amber-50',
+    },
+    {
+      title: t('calc.totalColumn'),
+      icon: <Calculator size={28} className="text-slate-700" />,
+      path: '/column/total',
+      color: 'bg-slate-100',
     },
   ];
 

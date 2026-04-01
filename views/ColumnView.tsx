@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Calculator, Columns, Grid3X3, Layers, Save } from 'lucide-react';
+import { Calculator, Grid3X3, Save } from 'lucide-react';
 import { calcColumnQM, type ColumnInputs, type ColumnQMResult } from '../src/lib/qm';
 import { saveResultRemote } from '../services/historyService';
 import { getFieldState } from '../lib/fieldState';
@@ -8,28 +8,32 @@ import { useI18n } from '../src/i18n/I18nContext';
 import { formatSupabaseError } from '../lib/formatSupabaseError';
 import { useFeedback } from '../contexts/FeedbackContext';
 
+type ColumnMode = 'main-bars' | 'links' | 'total';
+
+type ColumnViewProps = {
+  mode: ColumnMode;
+};
+
 type ColumnForm = {
+  a: string;
   b: string;
-  l: string;
   H: string;
-  mainDiameter: string;
-  mainLength: string;
-  mainQty: string;
-  linkDiameter: string;
+  n: string;
+  C: string;
+  c: string;
+  d: string;
   spacing: string;
-  allowance: string;
 };
 
 const initialForm: ColumnForm = {
+  a: '',
   b: '',
-  l: '',
   H: '',
-  mainDiameter: '',
-  mainLength: '',
-  mainQty: '',
-  linkDiameter: '',
+  n: '',
+  C: '',
+  c: '',
+  d: '',
   spacing: '',
-  allowance: '',
 };
 
 const formatNumber = (value: number | null | undefined, decimals: number) => {
@@ -42,68 +46,59 @@ const parseNumber = (value: string) => {
   return Number.isFinite(num) ? num : 0;
 };
 
-const ColumnView: React.FC = () => {
+const ColumnView: React.FC<ColumnViewProps> = ({ mode }) => {
   const { t } = useI18n();
   const [form, setForm] = useState<ColumnForm>(initialForm);
   const [touched, setTouched] = useState({
+    a: false,
     b: false,
-    l: false,
     H: false,
-    mainDiameter: false,
-    mainLength: false,
-    mainQty: false,
-    linkDiameter: false,
+    n: false,
+    C: false,
+    c: false,
+    d: false,
     spacing: false,
-    allowance: false,
   });
   const [submitted, setSubmitted] = useState(false);
   const [result, setResult] = useState<ColumnQMResult | null>(null);
   const [saving, setSaving] = useState(false);
   const { showSuccess, showError } = useFeedback();
 
-  const validatePositive = (value: string) => {
-    if (!value.trim()) return t('calc.validationRequired');
-    const num = Number(value);
-    if (!Number.isFinite(num) || num <= 0) return t('calc.validationPositive');
-    return null;
-  };
-
   const validateNonNegative = (value: string) => {
-    if (!value.trim()) return t('calc.validationRequired');
+    if (!value.trim()) return null;
     const num = Number(value);
     if (!Number.isFinite(num) || num < 0) return t('calc.validationNonNegative');
     return null;
   };
 
   const validateNonNegativeInt = (value: string) => {
-    if (!value.trim()) return t('calc.validationRequired');
+    if (!value.trim()) return null;
     const num = Number(value);
     if (!Number.isFinite(num) || !Number.isInteger(num)) return t('calc.validationInteger');
     if (num < 0) return t('calc.validationNonNegative');
     return null;
   };
+
   const errors = useMemo(() => ({
-    b: validatePositive(form.b),
-    l: validatePositive(form.l),
-    H: validatePositive(form.H),
-    mainDiameter: validatePositive(form.mainDiameter),
-    mainLength: validatePositive(form.mainLength),
-    mainQty: validateNonNegativeInt(form.mainQty),
-    linkDiameter: validatePositive(form.linkDiameter),
-    spacing: validatePositive(form.spacing),
-    allowance: validateNonNegative(form.allowance),
+    a: validateNonNegative(form.a),
+    b: validateNonNegative(form.b),
+    H: validateNonNegative(form.H),
+    n: validateNonNegativeInt(form.n),
+    C: validateNonNegative(form.C),
+    c: validateNonNegative(form.c),
+    d: validateNonNegative(form.d),
+    spacing: validateNonNegative(form.spacing),
   }), [form, t]);
 
   const states = {
-    b: getFieldState({ value: form.b, validator: validatePositive, touched: touched.b, submitted }),
-    l: getFieldState({ value: form.l, validator: validatePositive, touched: touched.l, submitted }),
-    H: getFieldState({ value: form.H, validator: validatePositive, touched: touched.H, submitted }),
-    mainDiameter: getFieldState({ value: form.mainDiameter, validator: validatePositive, touched: touched.mainDiameter, submitted }),
-    mainLength: getFieldState({ value: form.mainLength, validator: validatePositive, touched: touched.mainLength, submitted }),
-    mainQty: getFieldState({ value: form.mainQty, validator: validateNonNegativeInt, touched: touched.mainQty, submitted }),
-    linkDiameter: getFieldState({ value: form.linkDiameter, validator: validatePositive, touched: touched.linkDiameter, submitted }),
-    spacing: getFieldState({ value: form.spacing, validator: validatePositive, touched: touched.spacing, submitted }),
-    allowance: getFieldState({ value: form.allowance, validator: validateNonNegative, touched: touched.allowance, submitted }),
+    a: getFieldState({ value: form.a, validator: validateNonNegative, touched: touched.a, submitted }),
+    b: getFieldState({ value: form.b, validator: validateNonNegative, touched: touched.b, submitted }),
+    H: getFieldState({ value: form.H, validator: validateNonNegative, touched: touched.H, submitted }),
+    n: getFieldState({ value: form.n, validator: validateNonNegativeInt, touched: touched.n, submitted }),
+    C: getFieldState({ value: form.C, validator: validateNonNegative, touched: touched.C, submitted }),
+    c: getFieldState({ value: form.c, validator: validateNonNegative, touched: touched.c, submitted }),
+    d: getFieldState({ value: form.d, validator: validateNonNegative, touched: touched.d, submitted }),
+    spacing: getFieldState({ value: form.spacing, validator: validateNonNegative, touched: touched.spacing, submitted }),
   };
 
   const hasErrors = Object.values(errors).some((err) => !!err);
@@ -113,15 +108,14 @@ const ColumnView: React.FC = () => {
   };
 
   const buildInputs = (): ColumnInputs => ({
+    a: parseNumber(form.a),
     b: parseNumber(form.b),
-    l: parseNumber(form.l),
     H: parseNumber(form.H),
-    mainBarDiameterMm: parseNumber(form.mainDiameter),
-    mainBarLengthM: parseNumber(form.mainLength),
-    mainBarQuantity: parseNumber(form.mainQty),
-    linkBarDiameterMm: parseNumber(form.linkDiameter),
-    spacingMm: parseNumber(form.spacing),
-    allowanceMm: parseNumber(form.allowance),
+    n: parseNumber(form.n),
+    C: parseNumber(form.C),
+    c: parseNumber(form.c),
+    d: parseNumber(form.d),
+    spacing: parseNumber(form.spacing),
   });
 
   const computeResult = () => {
@@ -143,9 +137,52 @@ const ColumnView: React.FC = () => {
     }
   };
 
+  const getSaveConfig = (output: ColumnQMResult) => {
+    if (mode === 'main-bars') {
+      return {
+        label: 'Column Main Bars',
+        outputs: {
+          main_bars_m: output.main_bars_m,
+        },
+        result: output.main_bars_m,
+      };
+    }
+
+    if (mode === 'links') {
+      return {
+        label: 'Column Links',
+        outputs: {
+          link_length_m: output.link_length_m,
+          links_qty: output.links_qty,
+          links_total_m: output.links_total_m,
+        },
+        result: output.links_total_m,
+      };
+    }
+
+    return {
+      label: 'Column Total',
+      outputs: {
+        concrete_m3: output.concrete_m3,
+        formwork_m2: output.formwork_m2,
+        main_bars_m: output.main_bars_m,
+        links_total_m: output.links_total_m,
+        column_total_m: output.column_total_m,
+      },
+      result: output.column_total_m,
+    };
+  };
+
   const handleSave = async () => {
     const computed = computeResult();
-    if (!computed) {
+    const valueToSave =
+      mode === 'main-bars'
+        ? computed?.result.main_bars_m ?? 0
+        : mode === 'links'
+          ? computed?.result.links_total_m ?? 0
+          : computed?.result.column_total_m ?? 0;
+
+    if (!computed || valueToSave <= 0) {
       showValidation();
       return;
     }
@@ -153,30 +190,24 @@ const ColumnView: React.FC = () => {
     setSaving(true);
     try {
       const { inputs, result: output } = computed;
+      const saveConfig = getSaveConfig(output);
+
       await saveResultRemote({
         type: 'column',
-        label: 'Column QM',
+        label: saveConfig.label,
         inputs: {
+          a_m: inputs.a,
           b_m: inputs.b,
-          l_m: inputs.l,
           H_m: inputs.H,
-          main_d_mm: inputs.mainBarDiameterMm,
-          main_length_m: inputs.mainBarLengthM,
-          main_qty: inputs.mainBarQuantity,
-          link_d_mm: inputs.linkBarDiameterMm,
-          spacing_mm: inputs.spacingMm,
-          allowance_mm: inputs.allowanceMm,
+          n: inputs.n,
+          C_m: inputs.C,
+          c_m: inputs.c,
+          d_mm: inputs.d,
+          spacing_m: inputs.spacing,
         },
-        outputs: {
-          concrete_m3: output.concrete_m3,
-          formwork_m2: output.formwork_m2,
-          steel_main_kg: output.steel_main_kg,
-          steel_links_kg: output.steel_links_kg,
-          steel_total_kg: output.steel_total_kg,
-          links_qty: output.links_qty,
-        },
-        result: output.steel_total_kg,
-        unit: 'kg',
+        outputs: saveConfig.outputs,
+        result: saveConfig.result,
+        unit: 'm',
       });
       showSuccess(t('modal.saveSuccessTitle'), t('modal.saveSuccessMsg'));
     } catch (err: any) {
@@ -187,6 +218,192 @@ const ColumnView: React.FC = () => {
     }
   };
 
+  const canSave =
+    !!result &&
+    (
+      (mode === 'main-bars' && result.main_bars_m > 0) ||
+      (mode === 'links' && result.links_total_m > 0) ||
+      (mode === 'total' && result.column_total_m > 0)
+    ) &&
+    !saving;
+
+  const renderField = (
+    key: keyof ColumnForm,
+    label: string,
+    unit: string,
+    options?: { step?: string; inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode'] }
+  ) => (
+    <QMField
+      label={label}
+      value={form[key]}
+      onChange={(value) => setForm((prev) => ({ ...prev, [key]: value }))}
+      onBlur={() => setTouched((prev) => ({ ...prev, [key]: true }))}
+      unit={unit}
+      errorMessage={errors[key]}
+      showError={states[key].showError}
+      showSuccess={states[key].showSuccess}
+      step={options?.step}
+      inputMode={options?.inputMode}
+    />
+  );
+
+  const renderInputs = () => {
+    if (mode === 'main-bars') {
+      return (
+        <div className="space-y-4">
+          {renderField('H', t('calc.column.heightHLabel'), 'm')}
+          {renderField('n', t('calc.mainBarsCountLabel'), t('common.barsUnit'), { step: '1', inputMode: 'numeric' })}
+          {renderField('C', t('calc.mainBarsDeductionLabel'), 'm')}
+        </div>
+      );
+    }
+
+    if (mode === 'links') {
+      return (
+        <div className="space-y-4">
+          {renderField('a', t('calc.column.sideALabel'), 'm')}
+          {renderField('b', t('calc.column.sideBLabel'), 'm')}
+          {renderField('H', t('calc.column.heightHLabel'), 'm')}
+          {renderField('c', t('calc.linkCoverLabel'), 'm')}
+          {renderField('d', t('calc.linkDiameterLabel'), 'mm')}
+          {renderField('spacing', t('calc.spacingLabel'), 'm')}
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-4">
+          <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">{t('calc.columnGeometry')}</h3>
+          {renderField('a', t('calc.column.sideALabel'), 'm')}
+          {renderField('b', t('calc.column.sideBLabel'), 'm')}
+          {renderField('H', t('calc.column.heightHLabel'), 'm')}
+        </div>
+        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-4">
+          <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">{t('calc.mainBars')}</h3>
+          {renderField('n', t('calc.mainBarsCountLabel'), t('common.barsUnit'), { step: '1', inputMode: 'numeric' })}
+          {renderField('C', t('calc.mainBarsDeductionLabel'), 'm')}
+        </div>
+        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-4">
+          <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">{t('calc.links')}</h3>
+          {renderField('c', t('calc.linkCoverLabel'), 'm')}
+          {renderField('d', t('calc.linkDiameterLabel'), 'mm')}
+          {renderField('spacing', t('calc.spacingLabel'), 'm')}
+        </div>
+      </div>
+    );
+  };
+
+  const renderResultCard = () => {
+    if (mode === 'main-bars') {
+      return (
+        <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
+          <div className="flex items-center gap-2 text-slate-700 font-semibold">
+            <Grid3X3 size={16} className="text-orange-500" />
+            {t('calc.mainBars')}
+          </div>
+          <div className="text-2xl font-black text-orange-600">
+            {formatNumber(result?.main_bars_m ?? null, 2)} m
+          </div>
+          <p className="text-xs text-slate-400">{t('calc.formulaColumnSteelMain')}</p>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!canSave}
+            className={`w-full py-4 rounded-2xl font-black active:scale-95 transition-transform ${
+              canSave ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+            }`}
+          >
+            <span className="inline-flex items-center gap-2"><Save size={18} /> {t('common.save')}</span>
+          </button>
+        </section>
+      );
+    }
+
+    if (mode === 'links') {
+      return (
+        <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
+          <div className="flex items-center gap-2 text-slate-700 font-semibold">
+            <Grid3X3 size={16} className="text-amber-500" />
+            {t('calc.links')}
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-sm font-semibold text-slate-600">
+              <span>{t('calc.linkLengthLabel')}</span>
+              <span className="text-base font-black text-amber-600">{formatNumber(result?.link_length_m ?? null, 2)} m</span>
+            </div>
+            <p className="text-xs text-slate-400">{t('calc.formulaColumnSteelLinks')}</p>
+            <div className="flex items-center justify-between text-sm font-semibold text-slate-600">
+              <span>{t('calc.linksQtyLabel')}</span>
+              <span className="text-base font-black text-amber-600">{formatNumber(result?.links_qty ?? null, 2)}</span>
+            </div>
+            <p className="text-xs text-slate-400">{t('calc.formulaColumnLinksQty')}</p>
+            <div className="flex items-center justify-between text-sm font-semibold text-slate-600">
+              <span>{t('calc.totalLinksLabel')}</span>
+              <span className="text-base font-black text-amber-700">{formatNumber(result?.links_total_m ?? null, 2)} m</span>
+            </div>
+            <p className="text-xs text-slate-400">{t('calc.formulaColumnTotalLinks')}</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!canSave}
+            className={`w-full py-4 rounded-2xl font-black active:scale-95 transition-transform ${
+              canSave ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+            }`}
+          >
+            <span className="inline-flex items-center gap-2"><Save size={18} /> {t('common.save')}</span>
+          </button>
+        </section>
+      );
+    }
+
+    return (
+      <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
+        <div className="flex items-center gap-2 text-slate-700 font-semibold">
+          <Calculator size={16} className="text-slate-600" />
+          {t('calc.totalColumn')}
+        </div>
+        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-3">
+          <div className="flex items-center justify-between text-sm font-semibold text-slate-600">
+            <span>{t('calc.concreteTitle')}</span>
+            <span>{formatNumber(result?.concrete_m3 ?? null, 3)} m3</span>
+          </div>
+          <div className="flex items-center justify-between text-sm font-semibold text-slate-600">
+            <span>{t('calc.formworkTitle')}</span>
+            <span>{formatNumber(result?.formwork_m2 ?? null, 3)} m2</span>
+          </div>
+          <div className="flex items-center justify-between text-sm font-semibold text-slate-600">
+            <span>{t('calc.mainBarsLabel')}</span>
+            <span>{formatNumber(result?.main_bars_m ?? null, 2)} m</span>
+          </div>
+          <div className="flex items-center justify-between text-sm font-semibold text-slate-600">
+            <span>{t('calc.linksLabel')}</span>
+            <span>{formatNumber(result?.links_total_m ?? null, 2)} m</span>
+          </div>
+          <div className="flex items-center justify-between pt-3 border-t border-slate-200 text-sm font-bold text-slate-800">
+            <span>{t('calc.reinforcementTotalLabel')}</span>
+            <span className="text-lg font-black text-slate-900">
+              {formatNumber(result?.column_total_m ?? null, 2)} m
+            </span>
+          </div>
+        </div>
+        <p className="text-xs text-slate-400">{t('calc.formulaColumnReinforcementTotal')}</p>
+        <p className="text-xs text-slate-400">{t('calc.totalColumnNote')}</p>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={!canSave}
+          className={`w-full py-4 rounded-2xl font-black active:scale-95 transition-transform ${
+            canSave ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+          }`}
+        >
+          <span className="inline-flex items-center gap-2"><Save size={18} /> {t('common.save')}</span>
+        </button>
+      </section>
+    );
+  };
+
   return (
     <div className="p-5 space-y-6">
       <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
@@ -195,122 +412,18 @@ const ColumnView: React.FC = () => {
             <Calculator size={20} />
           </div>
           <div>
-            <h2 className="font-bold text-slate-800">{t('calc.column.title')}</h2>
+            <h2 className="font-bold text-slate-800">
+              {mode === 'main-bars'
+                ? t('calc.mainBars')
+                : mode === 'links'
+                  ? t('calc.links')
+                  : t('calc.totalColumn')}
+            </h2>
             <p className="text-xs text-slate-400">{t('calc.column.subtitle')}</p>
           </div>
         </header>
 
-        <div className="space-y-4">
-          <QMField
-            label={t('calc.column.widthLabel')}
-            value={form.b}
-            onChange={(value) => setForm((prev) => ({ ...prev, b: value }))}
-            onBlur={() => setTouched((prev) => ({ ...prev, b: true }))}
-            unit="m"
-            helperText={t('common.requiredHint')}
-            errorMessage={errors.b}
-            showError={states.b.showError}
-            showSuccess={states.b.showSuccess}
-          />
-          <QMField
-            label={t('calc.column.lengthLabel')}
-            value={form.l}
-            onChange={(value) => setForm((prev) => ({ ...prev, l: value }))}
-            onBlur={() => setTouched((prev) => ({ ...prev, l: true }))}
-            unit="m"
-            helperText={t('common.requiredHint')}
-            errorMessage={errors.l}
-            showError={states.l.showError}
-            showSuccess={states.l.showSuccess}
-          />
-          <QMField
-            label={t('calc.column.heightLabel')}
-            value={form.H}
-            onChange={(value) => setForm((prev) => ({ ...prev, H: value }))}
-            onBlur={() => setTouched((prev) => ({ ...prev, H: true }))}
-            unit="m"
-            helperText={t('common.requiredHint')}
-            errorMessage={errors.H}
-            showError={states.H.showError}
-            showSuccess={states.H.showSuccess}
-          />
-        </div>
-
-        <div className="mt-6 bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-4">
-          <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">{t('calc.mainBars')}</h3>
-          <QMField
-            label={t('calc.barDiameter')}
-            value={form.mainDiameter}
-            onChange={(value) => setForm((prev) => ({ ...prev, mainDiameter: value }))}
-            onBlur={() => setTouched((prev) => ({ ...prev, mainDiameter: true }))}
-            unit="mm"
-            helperText={t('common.requiredHint')}
-            errorMessage={errors.mainDiameter}
-            showError={states.mainDiameter.showError}
-            showSuccess={states.mainDiameter.showSuccess}
-          />
-          <QMField
-            label={t('calc.barLength')}
-            value={form.mainLength}
-            onChange={(value) => setForm((prev) => ({ ...prev, mainLength: value }))}
-            onBlur={() => setTouched((prev) => ({ ...prev, mainLength: true }))}
-            unit="m"
-            helperText={t('common.requiredHint')}
-            errorMessage={errors.mainLength}
-            showError={states.mainLength.showError}
-            showSuccess={states.mainLength.showSuccess}
-          />
-          <QMField
-            label={t('calc.quantityBars')}
-            value={form.mainQty}
-            onChange={(value) => setForm((prev) => ({ ...prev, mainQty: value }))}
-            onBlur={() => setTouched((prev) => ({ ...prev, mainQty: true }))}
-            unit={t('common.barsUnit')}
-            helperText={t('common.requiredHint')}
-            errorMessage={errors.mainQty}
-            showError={states.mainQty.showError}
-            showSuccess={states.mainQty.showSuccess}
-            step="1"
-            inputMode="numeric"
-          />
-        </div>
-
-        <div className="mt-6 bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-4">
-          <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">{t('calc.links')}</h3>
-          <QMField
-            label={t('calc.barDiameter')}
-            value={form.linkDiameter}
-            onChange={(value) => setForm((prev) => ({ ...prev, linkDiameter: value }))}
-            onBlur={() => setTouched((prev) => ({ ...prev, linkDiameter: true }))}
-            unit="mm"
-            helperText={t('common.requiredHint')}
-            errorMessage={errors.linkDiameter}
-            showError={states.linkDiameter.showError}
-            showSuccess={states.linkDiameter.showSuccess}
-          />
-          <QMField
-            label={t('calc.spacing')}
-            value={form.spacing}
-            onChange={(value) => setForm((prev) => ({ ...prev, spacing: value }))}
-            onBlur={() => setTouched((prev) => ({ ...prev, spacing: true }))}
-            unit="mm"
-            helperText={t('common.requiredHint')}
-            errorMessage={errors.spacing}
-            showError={states.spacing.showError}
-            showSuccess={states.spacing.showSuccess}
-          />
-          <QMField
-            label={t('calc.allowance')}
-            value={form.allowance}
-            onChange={(value) => setForm((prev) => ({ ...prev, allowance: value }))}
-            onBlur={() => setTouched((prev) => ({ ...prev, allowance: true }))}
-            unit="mm"
-            helperText={t('common.requiredHint')}
-            errorMessage={errors.allowance}
-            showError={states.allowance.showError}
-            showSuccess={states.allowance.showSuccess}
-          />
-        </div>
+        {renderInputs()}
 
         <button
           type="button"
@@ -321,73 +434,7 @@ const ColumnView: React.FC = () => {
         </button>
       </section>
 
-      <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
-        <div className="flex items-center gap-2 text-slate-700 font-semibold">
-          <Columns size={16} className="text-emerald-500" />
-          {t('calc.concreteTitle')}
-        </div>
-        <div className="text-2xl font-black text-emerald-600">
-          {formatNumber(result?.concrete_m3 ?? null, 3)} m3
-        </div>
-        <p className="text-xs text-slate-400">{t('calc.formulaColumnConcrete')}</p>
-
-        <div className="pt-4 border-t border-slate-100" />
-
-        <div className="flex items-center gap-2 text-slate-700 font-semibold">
-          <Layers size={16} className="text-blue-500" />
-          {t('calc.formworkTitle')}
-        </div>
-        <div className="text-2xl font-black text-blue-700">
-          {formatNumber(result?.formwork_m2 ?? null, 3)} m2
-        </div>
-        <p className="text-xs text-slate-400">{t('calc.formulaColumnFormwork')}</p>
-
-        <div className="pt-4 border-t border-slate-100" />
-
-        <div className="flex items-center gap-2 text-slate-700 font-semibold">
-          <Grid3X3 size={16} className="text-orange-500" />
-          {t('calc.reinforcementTitle')}
-        </div>
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm font-semibold text-slate-600">
-            <span>{t('calc.mainBarsLabel')}</span>
-            <span className="text-base font-black text-orange-600">
-              {formatNumber(result?.steel_main_kg ?? null, 2)} kg
-            </span>
-          </div>
-          <p className="text-xs text-slate-400">{t('calc.formulaColumnSteelMain')}</p>
-          <div className="flex items-center justify-between text-sm font-semibold text-slate-600">
-            <span>{t('calc.linksLabel')}</span>
-            <span className="text-base font-black text-orange-600">
-              {formatNumber(result?.steel_links_kg ?? null, 2)} kg
-            </span>
-          </div>
-          <p className="text-xs text-slate-400">{t('calc.formulaColumnSteelLinks')}</p>
-          <div className="text-xs font-semibold text-slate-500">
-            {t('calc.linksQtyLabel')}: {formatNumber(result?.links_qty ?? null, 2)} | {t('calc.linkLengthLabel')}: {formatNumber(result?.link_length_m ?? null, 2)} m
-          </div>
-          <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-sm font-bold text-slate-700">
-            <span>{t('calc.totalSteelLabel')}</span>
-            <span className="text-lg font-black text-orange-700">
-              {formatNumber(result?.steel_total_kg ?? null, 2)} kg
-            </span>
-          </div>
-        </div>
-
-
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={!result || saving}
-          className={`w-full py-4 rounded-2xl font-black active:scale-95 transition-transform ${
-            result && !saving
-              ? 'bg-slate-900 text-white'
-              : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-          }`}
-        >
-          <span className="inline-flex items-center gap-2"><Save size={18} /> {t('common.save')}</span>
-        </button>
-      </section>
+      {renderResultCard()}
     </div>
   );
 };

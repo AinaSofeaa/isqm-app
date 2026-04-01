@@ -2,8 +2,14 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../services/supabaseClient';
 import type { Profile } from '../types';
+import { buildProfilePayload, profileSeedFromUser } from '../lib/profileSeed';
 
 const BLOCK_SESSION_KEY = 'isqm.blockNextSession';
+
+const devLogProfile = (message: string, payload: unknown) => {
+  if (!import.meta.env.DEV) return;
+  console.info(`[AuthContext] ${message}`, payload);
+};
 
 type AuthState = {
   session: Session | null;
@@ -68,21 +74,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const fetchOrCreateProfile = useCallback(async (userId: string) => {
+  const fetchOrCreateProfile = useCallback(async (authUser: User) => {
+    const userId = authUser.id;
+    const seed = profileSeedFromUser(authUser);
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
       .maybeSingle();
     if (error) throw error;
-    if (data) return data as Profile;
+
+    if (data) {
+      const existingProfile = data as Profile;
+      const needsHydration =
+        (!!seed.user_type && !existingProfile.user_type) ||
+        (!!seed.institution_id && !existingProfile.institution_id) ||
+        (!!seed.institution && !existingProfile.institution) ||
+        (!!seed.company_name && !existingProfile.company_name) ||
+        (!!seed.full_name && !existingProfile.full_name) ||
+        (!!seed.phone && !existingProfile.phone);
+
+      if (!needsHydration) return existingProfile;
+
+      const payload = buildProfilePayload(userId, seed, existingProfile);
+      devLogProfile('profile hydrate payload', payload);
+
+      const { data: hydrated, error: hydrateError } = await supabase
+        .from('profiles')
+        .upsert(payload, { onConflict: 'id' })
+        .select('*')
+        .single();
+
+      if (hydrateError) {
+        devLogProfile('profile hydrate error', hydrateError);
+        return existingProfile;
+      }
+
+      devLogProfile('profile hydrate response', hydrated);
+      return hydrated as Profile;
+    }
+
+    const payload = buildProfilePayload(userId, seed);
+    devLogProfile('profile insert payload', payload);
 
     const { data: created, error: createError } = await supabase
       .from('profiles')
-      .insert({ id: userId })
+      .insert(payload)
       .select('*')
       .single();
     if (createError) {
+      devLogProfile('profile insert error', createError);
       const { data: retry, error: retryError } = await supabase
         .from('profiles')
         .select('*')
@@ -92,6 +133,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (retry) return retry as Profile;
       throw createError;
     }
+    devLogProfile('profile insert response', created);
     return created as Profile;
   }, []);
 
@@ -104,7 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     let cancelled = false;
     setProfileLoading(true);
-    fetchOrCreateProfile(user.id)
+    fetchOrCreateProfile(user)
       .then((data) => {
         if (!cancelled) setProfile(data);
       })
@@ -119,7 +161,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       cancelled = true;
     };
-  }, [fetchOrCreateProfile, user?.id]);
+  }, [fetchOrCreateProfile, user]);
 
   const refreshProfile = useCallback(async () => {
     if (!user) {
@@ -129,7 +171,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setProfileLoading(true);
     try {
-      const data = await fetchOrCreateProfile(user.id);
+      const data = await fetchOrCreateProfile(user);
       setProfile(data);
       return data;
     } catch (err) {
@@ -139,7 +181,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setProfileLoading(false);
     }
-  }, [fetchOrCreateProfile, user?.id]);
+  }, [fetchOrCreateProfile, user]);
 
   const updateProfile = useCallback(async (partialProfile: Partial<Profile>) => {
     if (!user) throw new Error('No authenticated user');

@@ -142,6 +142,10 @@ const HistoryView: React.FC = () => {
       steel_main_kg: { label: t('history.outputSteelMain'), unit: 'kg', decimals: 2 },
       steel_links_kg: { label: t('history.outputSteelLinks'), unit: 'kg', decimals: 2 },
       steel_total_kg: { label: t('history.outputSteelTotal'), unit: 'kg', decimals: 2 },
+      main_bars_m: { label: t('history.outputMainBars'), unit: 'm', decimals: 2 },
+      link_length_m: { label: t('history.outputLinkLength'), unit: 'm', decimals: 2 },
+      links_total_m: { label: t('history.outputLinksTotal'), unit: 'm', decimals: 2 },
+      column_total_m: { label: t('history.outputColumnTotal'), unit: 'm', decimals: 2 },
       bars_qty: { label: t('history.outputBarsQty'), decimals: 2 },
       links_qty: { label: t('history.outputLinksQty'), decimals: 2 },
     };
@@ -149,7 +153,7 @@ const HistoryView: React.FC = () => {
     const orderMap: Record<string, string[]> = {
       beam: ['concrete_m3', 'formwork_m2', 'steel_kg'],
       slab: ['concrete_m3', 'formwork_m2', 'soffit_m2', 'form_to_side_m2', 'steel_kg', 'bars_qty'],
-      column: ['concrete_m3', 'formwork_m2', 'steel_main_kg', 'steel_links_kg', 'steel_total_kg', 'links_qty'],
+      column: ['concrete_m3', 'formwork_m2', 'main_bars_m', 'link_length_m', 'links_qty', 'links_total_m', 'column_total_m', 'steel_main_kg', 'steel_links_kg', 'steel_total_kg'],
     };
 
     const order = orderMap[item.type] ?? Object.keys(outputs);

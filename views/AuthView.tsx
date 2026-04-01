@@ -4,19 +4,27 @@ import { Briefcase, Check, LogIn, Mail, Lock, User, UserPlus } from 'lucide-reac
 import { supabase } from '../services/supabaseClient';
 import InstitutionPicker from '../components/InstitutionPicker';
 import { getFieldState } from '../lib/fieldState';
+import { formatSupabaseError } from '../lib/formatSupabaseError';
+import { normalizeProfileSeed } from '../lib/profileSeed';
 import type { Institution } from '../types';
 import { useI18n } from '../src/i18n/I18nContext';
 import LanguageToggle from '../components/LanguageToggle';
 
 const BLOCK_SESSION_KEY = 'isqm.blockNextSession';
+type UiMessage = { key: string; values?: Record<string, string | number> };
+
+const devLogAuth = (message: string, payload: unknown) => {
+  if (!import.meta.env.DEV) return;
+  console.info(`[AuthView] ${message}`, payload);
+};
 
 const AuthView: React.FC = () => {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<{ key: string } | null>(null);
-  const [successMsg, setSuccessMsg] = useState<{ key: string } | null>(null);
+  const [errorMsg, setErrorMsg] = useState<UiMessage | null>(null);
+  const [successMsg, setSuccessMsg] = useState<UiMessage | null>(null);
   const [userType, setUserType] = useState<'student' | 'worker' | ''>('');
   const [institutionId, setInstitutionId] = useState('');
   const [companyName, setCompanyName] = useState('');
@@ -122,31 +130,106 @@ const AuthView: React.FC = () => {
   const userTypeErrorId = useId();
   const companyErrorId = useId();
 
-  const emailConfirmationMessage = (err: any) => {
-    const message = (err?.message ?? '').toLowerCase();
+  const isEmailConfirmationError = (err: unknown) => {
+    const message = formatSupabaseError(err, '').toLowerCase();
     if (
       (message.includes('confirm') && message.includes('email')) ||
       message.includes('email not confirmed') ||
       (message.includes('verification') && message.includes('email'))
     ) {
-      return 'auth.errorConfirmEmail';
+      return true;
     }
-    return null;
+    return false;
   };
 
-  const resolveInstitutionName = async () => {
-    if (selectedInstitution?.name) return selectedInstitution.name;
-    if (!institutionId) return null;
+  const getSignupErrorMessage = (err: unknown): UiMessage => {
+    const detail = formatSupabaseError(err, t('common.errorTryAgain'));
+    const message = detail.toLowerCase();
+    const code = typeof err === 'object' && err !== null && 'code' in err ? String((err as any).code ?? '') : '';
+
+    if (
+      code === 'user_already_exists' ||
+      message.includes('already registered') ||
+      message.includes('already been registered') ||
+      message.includes('user already exists')
+    ) {
+      return { key: 'auth.errorDuplicateEmail' };
+    }
+
+    if (
+      message.includes('database error saving new user') ||
+      message.includes('handle_new_user') ||
+      message.includes('trigger') ||
+      message.includes('public.profiles')
+    ) {
+      return { key: 'auth.errorSignupProfileTrigger' };
+    }
+
+    if (
+      message.includes('row-level security') ||
+      message.includes('violates row-level security') ||
+      message.includes('permission denied')
+    ) {
+      return { key: 'auth.errorSignupProfileRls' };
+    }
+
+    if (
+      message.includes('invalid input syntax for type uuid') ||
+      message.includes('foreign key') ||
+      message.includes('institution_id')
+    ) {
+      return { key: 'auth.errorInvalidInstitutionSelection' };
+    }
+
+    return { key: 'auth.errorSignupFailedDetailed', values: { error: detail } };
+  };
+
+  const resolveInstitutionSelection = async () => {
+    if (userType !== 'student') {
+      return { institution_id: null, institution: null };
+    }
+
+    const normalizedId = institutionId.trim();
+    if (!normalizedId) return null;
+
+    if (selectedInstitution?.id === normalizedId && selectedInstitution.name) {
+      const normalized = {
+        institution_id: normalizedId,
+        institution: selectedInstitution.name.trim(),
+      };
+      devLogAuth('institution payload', {
+        source: 'selectedInstitution',
+        selectedInstitution,
+        institutionId: normalizedId,
+        normalized,
+      });
+      return normalized;
+    }
+
     const { data, error } = await supabase
       .from('institutions')
-      .select('name')
-      .eq('id', institutionId)
+      .select('id, name')
+      .eq('id', normalizedId)
       .maybeSingle();
+    devLogAuth('institution payload', {
+      source: 'database',
+      selectedInstitution,
+      institutionId: normalizedId,
+      response: data,
+      error,
+    });
+
     if (error) {
-      console.warn('Failed to load institution name', error);
+      throw error;
+    }
+    if (!data?.id || !data?.name) {
       return null;
     }
-    return data?.name ?? null;
+
+    return {
+      institution_id: data.id,
+      institution: data.name,
+    };
   };
 
   useEffect(() => {
@@ -167,7 +250,7 @@ const AuthView: React.FC = () => {
     const params = new URLSearchParams(location.search);
     if (params.get('registered') === '1') {
       setMode('login');
-      setSuccessMsg({ key: 'auth.successRegistered' });
+      setSuccessMsg({ key: params.get('confirm') === '1' ? 'auth.successRegisteredCheckEmail' : 'auth.successRegistered' });
       setErrorMsg(null);
       return;
     }
@@ -206,6 +289,7 @@ const AuthView: React.FC = () => {
   const onEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setSuccessMsg(null);
     setSubmitted(true);
 
     const hasErrors = Boolean(
@@ -223,17 +307,67 @@ const AuthView: React.FC = () => {
       if (mode === 'login') {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
-          setErrorMsg({ key: 'auth.errorLoginFailed' });
+          devLogAuth('login error', error);
+          if (isEmailConfirmationError(error)) {
+            setErrorMsg({ key: 'auth.errorConfirmEmail' });
+          } else {
+            setErrorMsg({ key: 'auth.errorLoginFailed' });
+          }
           return;
         }
         navigate('/', { replace: true });
       } else {
+        const normalizedInstitution = await resolveInstitutionSelection();
+        if (userType === 'student' && !normalizedInstitution) {
+          setErrorMsg({ key: 'auth.errorInvalidInstitutionSelection' });
+          return;
+        }
+
+        const signupSeed = normalizeProfileSeed({
+          user_type: userType || null,
+          institution_id: normalizedInstitution?.institution_id ?? null,
+          institution: normalizedInstitution?.institution ?? null,
+          company_name: userType === 'worker' ? companyName.trim() : null,
+        });
+
+        const signupPayload = {
+          email: email.trim(),
+          password,
+          options: {
+            data: signupSeed,
+          },
+        };
+
+        devLogAuth('signup payload', {
+          email: signupPayload.email,
+          passwordLength: password.length,
+          metadata: signupPayload.options.data,
+        });
+
         sessionStorage.setItem(BLOCK_SESSION_KEY, '1');
-        const { data, error } = await supabase.auth.signUp({ email, password });
+        const { data, error } = await supabase.auth.signUp(signupPayload);
+
+        devLogAuth('signup response', {
+          error,
+          user: data.user
+            ? {
+                id: data.user.id,
+                email: data.user.email,
+                identities: Array.isArray(data.user.identities) ? data.user.identities.length : null,
+                metadata: data.user.user_metadata,
+              }
+            : null,
+          session: data.session
+            ? {
+                hasSession: true,
+                userId: data.session.user.id,
+              }
+            : null,
+        });
+
         if (error) {
           sessionStorage.removeItem(BLOCK_SESSION_KEY);
-          const confirmKey = emailConfirmationMessage(error);
-          setErrorMsg({ key: confirmKey ?? 'common.errorGeneric' });
+          setErrorMsg(getSignupErrorMessage(error));
           return;
         }
         if (!data.user) {
@@ -242,42 +376,40 @@ const AuthView: React.FC = () => {
           return;
         }
 
-        let profileUpsertFailed = false;
-        if (userType) {
-          const institutionName = userType === 'student' ? await resolveInstitutionName() : null;
-          const profilePayload = {
-            id: data.user.id,
-            full_name: null,
-            phone: null,
-            user_type: userType,
-            institution_id: userType === 'student' ? institutionId || null : null,
-            company_name: userType === 'worker' ? companyName.trim() || null : null,
-            institution: userType === 'student' ? institutionName : null,
-            role: null,
-          };
+        const isMaskedDuplicate =
+          !data.session &&
+          Array.isArray(data.user.identities) &&
+          data.user.identities.length === 0;
 
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .upsert(profilePayload, { onConflict: 'id' });
+        if (isMaskedDuplicate) {
+          sessionStorage.removeItem(BLOCK_SESSION_KEY);
+          setErrorMsg({ key: 'auth.errorDuplicateEmailMasked' });
+          return;
+        }
 
-          if (profileError) {
-            setErrorMsg({ key: 'auth.errorProfileSetupFailed' });
-            profileUpsertFailed = true;
+        if (data.session) {
+          const { error: signOutError } = await supabase.auth.signOut();
+          if (signOutError) {
+            devLogAuth('signup signout error', signOutError);
           }
         }
 
-        await supabase.auth.signOut();
         sessionStorage.removeItem(BLOCK_SESSION_KEY);
         setPassword('');
         setMode('login');
-        setSuccessMsg({ key: 'auth.successRegistered' });
-        const target = profileUpsertFailed ? '/login?profile_error=1' : '/login?registered=1';
+        const target = data.session ? '/login?registered=1' : '/login?registered=1&confirm=1';
         navigate(target, { replace: true });
       }
     } catch (err: any) {
       sessionStorage.removeItem(BLOCK_SESSION_KEY);
-      const confirmKey = emailConfirmationMessage(err);
-      setErrorMsg({ key: confirmKey ?? 'common.errorGeneric' });
+      devLogAuth('signup exception', err);
+      if (mode === 'login' && isEmailConfirmationError(err)) {
+        setErrorMsg({ key: 'auth.errorConfirmEmail' });
+      } else if (mode === 'register') {
+        setErrorMsg(getSignupErrorMessage(err));
+      } else {
+        setErrorMsg({ key: 'auth.errorLoginFailed' });
+      }
     } finally {
       setBusy(false);
     }
@@ -320,12 +452,12 @@ const AuthView: React.FC = () => {
 
         {successMsg && (
           <div className="mb-4 text-sm font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 p-3 rounded-2xl">
-            {t(successMsg.key)}
+            {t(successMsg.key, successMsg.values)}
           </div>
         )}
         {errorMsg && (
           <div className="mb-4 text-sm font-semibold text-red-600 bg-red-50 border border-red-100 p-3 rounded-2xl">
-            {t(errorMsg.key)}
+            {t(errorMsg.key, errorMsg.values)}
           </div>
         )}
 
@@ -366,6 +498,7 @@ const AuthView: React.FC = () => {
                 <InstitutionPicker
                   valueInstitutionId={institutionId || null}
                   onChange={(inst) => {
+                    devLogAuth('institution picker value', inst);
                     setInstitutionId(inst?.id ?? '');
                     setSelectedInstitution(inst ?? null);
                     setTouched((prev) => ({ ...prev, institutionId: true }));
