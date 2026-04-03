@@ -7,15 +7,7 @@ import { useFeedback } from '../contexts/FeedbackContext';
 import { formatSupabaseError } from '../lib/formatSupabaseError';
 import { saveResultRemote } from '../services/historyService';
 import { useI18n } from '../src/i18n/I18nContext';
-import type { CalculationType, SavedResult } from '../types';
-
-type ConcreteCalcProps = {
-  entryType?: CalculationType;
-  entryLabel?: string;
-  outputKey?: string;
-  saveLabel?: string;
-  contextKey?: string;
-};
+import type { SavedResult } from '../types';
 
 const parseInput = (value: string) => {
   const parsed = Number(value);
@@ -29,35 +21,25 @@ const readInputValue = (item: SavedResult, key: string) => {
   return '';
 };
 
-const ConcreteCalc: React.FC<ConcreteCalcProps> = ({
-  entryType,
-  entryLabel,
-  outputKey,
-  saveLabel,
-  contextKey,
-}) => {
+const ColumnConcreteView: React.FC = () => {
   const { t } = useI18n();
-  const resolvedLabel = entryLabel ?? t('calc.concrete');
-  const resolvedType = entryType ?? 'concrete';
-  const resolvedOutputKey = outputKey ?? 'concrete_m3';
-  const resolvedSaveLabel = saveLabel ?? resolvedLabel;
-  const resolvedContextKey = contextKey ?? null;
-  const historyType = resolvedType === 'beam' || resolvedType === 'column' || resolvedType === 'slab'
-    ? resolvedType
-    : null;
   const [length, setLength] = useState('');
   const [width, setWidth] = useState('');
   const [height, setHeight] = useState('');
+  const [bilangan, setBilangan] = useState('');
   const [projectLocation, setProjectLocation] = useState('');
   const [referenceRemark, setReferenceRemark] = useState('');
-  const [volume, setVolume] = useState(0);
+  const [oneColumnVolume, setOneColumnVolume] = useState(0);
+  const [totalVolume, setTotalVolume] = useState(0);
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   const { showSuccess, showError } = useFeedback();
 
   useEffect(() => {
-    const nextVolume = parseInput(length) * parseInput(width) * parseInput(height);
-    setVolume(nextVolume);
-  }, [height, length, width]);
+    const nextOneColumnVolume = parseInput(length) * parseInput(width) * parseInput(height);
+    const nextTotalVolume = nextOneColumnVolume * parseInput(bilangan);
+    setOneColumnVolume(nextOneColumnVolume);
+    setTotalVolume(nextTotalVolume);
+  }, [bilangan, height, length, width]);
 
   const showValidation = () => {
     showError(t('modal.validationTitle'), t('modal.validationMsg'));
@@ -67,32 +49,35 @@ const ConcreteCalc: React.FC<ConcreteCalcProps> = ({
     setLength('');
     setWidth('');
     setHeight('');
+    setBilangan('');
     setProjectLocation('');
     setReferenceRemark('');
   };
 
   const handleSave = async () => {
-    if (volume <= 0) {
+    if (totalVolume <= 0) {
       showValidation();
       return;
     }
 
     try {
-      const outputs = resolvedOutputKey ? { [resolvedOutputKey]: volume } : undefined;
-
       await saveResultRemote({
-        type: resolvedType,
-        label: resolvedSaveLabel,
-        contextKey: resolvedContextKey,
+        type: 'column',
+        label: `${t('history.typeColumn')} ${t('calc.concrete')}`,
+        contextKey: 'column-concrete',
         projectLocation,
         referenceRemark,
         inputs: {
-          length: parseInput(length),
-          width: parseInput(width),
-          height: parseInput(height),
+          length_m: parseInput(length),
+          width_m: parseInput(width),
+          height_m: parseInput(height),
+          bilangan: parseInput(bilangan),
         },
-        outputs,
-        result: volume,
+        outputs: {
+          concrete_m3: oneColumnVolume,
+          concrete_total_m3: totalVolume,
+        },
+        result: totalVolume,
         unit: 'm3',
       });
       setHistoryRefreshKey((prev) => prev + 1);
@@ -104,9 +89,10 @@ const ConcreteCalc: React.FC<ConcreteCalcProps> = ({
   };
 
   const handleReuse = (item: SavedResult) => {
-    setLength(readInputValue(item, 'length'));
-    setWidth(readInputValue(item, 'width'));
-    setHeight(readInputValue(item, 'height'));
+    setLength(readInputValue(item, 'length_m'));
+    setWidth(readInputValue(item, 'width_m'));
+    setHeight(readInputValue(item, 'height_m'));
+    setBilangan(readInputValue(item, 'bilangan'));
     setProjectLocation(item.projectLocation ?? '');
     setReferenceRemark(item.referenceRemark ?? '');
   };
@@ -127,6 +113,7 @@ const ConcreteCalc: React.FC<ConcreteCalcProps> = ({
         <CalcField label={t('legacy.concrete.lengthLabel')} value={length} onChange={setLength} placeholder="0.00" />
         <CalcField label={t('legacy.concrete.widthLabel')} value={width} onChange={setWidth} placeholder="0.00" />
         <CalcField label={t('legacy.concrete.heightLabel')} value={height} onChange={setHeight} placeholder="0.00" />
+        <CalcField label={t('calc.bilanganLabel')} value={bilangan} onChange={setBilangan} placeholder="0" unit="ea" />
 
         <SaveMetaFields
           projectLocation={projectLocation}
@@ -135,16 +122,26 @@ const ConcreteCalc: React.FC<ConcreteCalcProps> = ({
           onReferenceRemarkChange={setReferenceRemark}
         />
 
-        <div className="mt-8 pt-6 border-t border-slate-50">
-          <div className="flex justify-between items-end mb-6">
-            <span className="text-slate-400 font-medium">{t('legacy.concrete.totalVolume')}</span>
+        <div className="mt-8 pt-6 border-t border-slate-50 space-y-4">
+          <div className="flex justify-between items-end">
+            <span className="text-slate-400 font-medium">{t('calc.columnConcreteOneLabel')}</span>
             <div className="text-right">
-              <span className="text-4xl font-black text-blue-700">{volume.toFixed(3)}</span>
+              <span className="text-4xl font-black text-blue-700">{oneColumnVolume.toFixed(3)}</span>
               <span className="text-lg font-bold text-blue-400 ml-1">m3</span>
             </div>
           </div>
+          <p className="text-xs text-slate-400">{t('legacy.concrete.formula')}</p>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="flex justify-between items-end pt-4 border-t border-slate-100">
+            <span className="text-slate-400 font-medium">{t('calc.columnConcreteTotalLabel')}</span>
+            <div className="text-right">
+              <span className="text-4xl font-black text-blue-700">{totalVolume.toFixed(3)}</span>
+              <span className="text-lg font-bold text-blue-400 ml-1">m3</span>
+            </div>
+          </div>
+          <p className="text-xs text-slate-400">{t('calc.formulaColumnConcreteTotal')}</p>
+
+          <div className="grid grid-cols-2 gap-3 pt-2">
             <button
               onClick={handleReset}
               className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-slate-100 text-slate-600 font-bold active:scale-95 transition-transform"
@@ -154,9 +151,9 @@ const ConcreteCalc: React.FC<ConcreteCalcProps> = ({
             </button>
             <button
               onClick={handleSave}
-              disabled={volume === 0}
+              disabled={totalVolume === 0}
               className={`flex items-center justify-center gap-2 py-4 rounded-2xl font-bold active:scale-95 transition-all ${
-                volume > 0
+                totalVolume > 0
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
                   : 'bg-slate-300 text-slate-100 cursor-not-allowed'
               }`}
@@ -174,16 +171,14 @@ const ConcreteCalc: React.FC<ConcreteCalcProps> = ({
         <p className="text-blue-700/70 text-sm leading-relaxed">{t('legacy.concrete.learningNoteBody')}</p>
       </div>
 
-      {historyType && resolvedContextKey ? (
-        <PageSavedHistorySection
-          type={historyType}
-          contextKey={resolvedContextKey}
-          refreshKey={historyRefreshKey}
-          onReuse={handleReuse}
-        />
-      ) : null}
+      <PageSavedHistorySection
+        type="column"
+        contextKey="column-concrete"
+        refreshKey={historyRefreshKey}
+        onReuse={handleReuse}
+      />
     </div>
   );
 };
 
-export default ConcreteCalc;
+export default ColumnConcreteView;

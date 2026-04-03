@@ -8,12 +8,18 @@ create table if not exists public.calculations (
   label text not null,
   inputs jsonb not null default '{}'::jsonb,
   outputs jsonb not null default '{}'::jsonb,
+  context_key text null,
+  project_location text null,
+  reference_remark text null,
   result double precision not null,
   unit text not null,
   created_at timestamptz not null default now()
 );
 
 alter table public.calculations add column if not exists outputs jsonb not null default '{}'::jsonb;
+alter table public.calculations add column if not exists context_key text null;
+alter table public.calculations add column if not exists project_location text null;
+alter table public.calculations add column if not exists reference_remark text null;
 alter table public.calculations drop constraint if exists calculations_type_check;
 alter table public.calculations add constraint calculations_type_check
   check (type in ('beam','column','slab','concrete','formwork','rebar'));
@@ -21,6 +27,9 @@ alter table public.calculations add constraint calculations_type_check
 -- Helpful index for listing by user
 create index if not exists calculations_user_id_created_at_idx
   on public.calculations (user_id, created_at desc);
+
+create index if not exists calculations_user_id_type_context_created_at_idx
+  on public.calculations (user_id, type, context_key, created_at desc);
 
 -- 2) Row Level Security
 alter table public.calculations enable row level security;

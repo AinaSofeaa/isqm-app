@@ -1,5 +1,5 @@
-import { supabase } from './supabaseClient';
 import type { SavedResult } from '../types';
+import { supabase } from './supabaseClient';
 
 type SaveEntry = Omit<SavedResult, 'id' | 'timestamp'>;
 
@@ -7,11 +7,17 @@ export type HistoryFilters = {
   type?: 'all' | 'beam' | 'column' | 'slab';
   fromDate?: string;
   toDate?: string;
+  contextKey?: string;
+  limit?: number;
 };
 
 const OUTPUTS_MISSING_MESSAGE = 'DB migration required: add outputs jsonb';
+const FALLBACK_CONTEXT_KEY = '__context_key';
+const FALLBACK_PROJECT_LOCATION = '__project_location';
+const FALLBACK_REFERENCE_REMARK = '__reference_remark';
 
 let outputsColumnAvailable: boolean | null = null;
+let metadataColumnsAvailable: boolean | null = null;
 let lastHistoryError: Error | null = null;
 
 export const getHistoryRemoteError = () => lastHistoryError;
@@ -22,6 +28,11 @@ const isMissingColumnError = (error: any, column: string) => {
   const code = String(error?.code ?? '');
   if (code === '42703') return true;
   return message.includes(column) || details.includes(column);
+};
+
+const normalizeOptionalText = (value: unknown) => {
+  const normalized = String(value ?? '').trim();
+  return normalized || null;
 };
 
 const ensureOutputsColumn = async () => {
@@ -40,6 +51,30 @@ const ensureOutputsColumn = async () => {
   outputsColumnAvailable = true;
 };
 
+const ensureMetadataColumns = async () => {
+  if (metadataColumnsAvailable !== null) return metadataColumnsAvailable;
+
+  const { error } = await supabase
+    .from('calculations')
+    .select('context_key,project_location,reference_remark')
+    .limit(1);
+
+  if (error) {
+    if (
+      isMissingColumnError(error, 'context_key') ||
+      isMissingColumnError(error, 'project_location') ||
+      isMissingColumnError(error, 'reference_remark')
+    ) {
+      metadataColumnsAvailable = false;
+      return false;
+    }
+    throw error;
+  }
+
+  metadataColumnsAvailable = true;
+  return true;
+};
+
 const toIsoStart = (dateValue?: string) => {
   if (!dateValue) return null;
   const dt = new Date(`${dateValue}T00:00:00`);
@@ -54,6 +89,55 @@ const toIsoEnd = (dateValue?: string) => {
   return dt.toISOString();
 };
 
+const sanitizeInputs = (value: unknown) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {} as Record<string, unknown>;
+
+  const nextEntries = Object.entries(value as Record<string, unknown>).filter(([key]) => (
+    key !== FALLBACK_CONTEXT_KEY &&
+    key !== FALLBACK_PROJECT_LOCATION &&
+    key !== FALLBACK_REFERENCE_REMARK
+  ));
+
+  return Object.fromEntries(nextEntries);
+};
+
+const readFallbackText = (value: unknown, key: string) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return normalizeOptionalText((value as Record<string, unknown>)[key]);
+};
+
+const inferContextKey = (type: string, label: string) => {
+  const normalizedType = String(type ?? '').trim().toLowerCase();
+  const normalizedLabel = String(label ?? '').trim().toLowerCase();
+
+  if (normalizedType === 'beam') {
+    if (normalizedLabel.includes('concrete')) return 'beam-concrete';
+    if (normalizedLabel.includes('formwork')) return 'beam-formwork';
+    if (normalizedLabel.includes('beam qm')) return 'beam-qm';
+  }
+
+  if (normalizedType === 'slab') {
+    if (normalizedLabel.includes('soffit')) return 'slab-soffit';
+    if (normalizedLabel.includes('concrete')) return 'slab-concrete';
+    if (normalizedLabel.includes('formwork')) return 'slab-formwork';
+    if (normalizedLabel.includes('slab qm')) return 'slab-qm';
+  }
+
+  if (normalizedType === 'column') {
+    if (normalizedLabel.includes('main bars')) return 'column-main-bars';
+    if (normalizedLabel.includes('link')) return 'column-link';
+    if (normalizedLabel.includes('formwork')) return 'column-formwork';
+    if (normalizedLabel.includes('concrete')) return 'column-concrete';
+  }
+
+  return null;
+};
+
+const matchesContextKey = (item: SavedResult, contextKey?: string) => {
+  if (!contextKey) return true;
+  return item.contextKey === contextKey;
+};
+
 export const saveResultRemote = async (entry: SaveEntry) => {
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
@@ -61,23 +145,45 @@ export const saveResultRemote = async (entry: SaveEntry) => {
 
   await ensureOutputsColumn();
 
-  const inputs = entry.inputs && typeof entry.inputs === 'object' ? entry.inputs : {};
-  const outputs = entry.outputs && typeof entry.outputs === 'object' ? entry.outputs : {};
+  const metadataSupported = await ensureMetadataColumns();
+  const inputs = entry.inputs && typeof entry.inputs === 'object' && !Array.isArray(entry.inputs)
+    ? { ...entry.inputs }
+    : {};
+  const outputs = entry.outputs && typeof entry.outputs === 'object' && !Array.isArray(entry.outputs)
+    ? entry.outputs
+    : {};
   const label = String(entry.label ?? '').trim() || 'Calculation';
   const unit = String(entry.unit ?? '').trim() || 'unit';
-  const resultValue = entry.result === null || entry.result === undefined ? null : String(entry.result);
+  const contextKey = normalizeOptionalText(entry.contextKey);
+  const projectLocation = normalizeOptionalText(entry.projectLocation);
+  const referenceRemark = normalizeOptionalText(entry.referenceRemark);
+  const resultValue = Number.isFinite(entry.result) ? entry.result : 0;
+
+  if (!metadataSupported) {
+    if (contextKey) inputs[FALLBACK_CONTEXT_KEY] = contextKey;
+    if (projectLocation) inputs[FALLBACK_PROJECT_LOCATION] = projectLocation;
+    if (referenceRemark) inputs[FALLBACK_REFERENCE_REMARK] = referenceRemark;
+  }
+
+  const insertPayload: Record<string, unknown> = {
+    user_id: uid,
+    type: entry.type,
+    label,
+    inputs,
+    outputs,
+    result: resultValue,
+    unit,
+  };
+
+  if (metadataSupported) {
+    insertPayload.context_key = contextKey;
+    insertPayload.project_location = projectLocation;
+    insertPayload.reference_remark = referenceRemark;
+  }
 
   const { data, error } = await supabase
     .from('calculations')
-    .insert({
-      user_id: uid,
-      type: entry.type,
-      label,
-      inputs,
-      outputs,
-      result: resultValue,
-      unit,
-    })
+    .insert(insertPayload)
     .select()
     .single();
 
@@ -87,25 +193,33 @@ export const saveResultRemote = async (entry: SaveEntry) => {
     }
     throw error;
   }
+
   return data;
 };
 
 export const getHistoryRemote = async (filters?: HistoryFilters): Promise<SavedResult[]> => {
   lastHistoryError = null;
+
   try {
     const { data: auth } = await supabase.auth.getUser();
     const uid = auth.user?.id;
     if (!uid) throw new Error('Not signed in');
 
+    const metadataSupported = await ensureMetadataColumns();
+    const selectColumns = metadataSupported
+      ? 'id,type,label,inputs,outputs,result,unit,created_at,context_key,project_location,reference_remark'
+      : 'id,type,label,inputs,outputs,result,unit,created_at';
+
     let query = supabase
       .from('calculations')
-      .select('id,type,label,inputs,outputs,result,unit,created_at')
+      .select(selectColumns)
       .eq('user_id', uid)
       .order('created_at', { ascending: false });
 
     if (filters?.type && filters.type !== 'all') {
       query = query.eq('type', filters.type);
     }
+
     const fromIso = toIsoStart(filters?.fromDate);
     const toIso = toIsoEnd(filters?.toDate);
     if (fromIso) {
@@ -123,21 +237,38 @@ export const getHistoryRemote = async (filters?: HistoryFilters): Promise<SavedR
       throw error;
     }
 
-    return (data as any[]).map((row) => {
+    let items = (data as any[]).map((row) => {
+      const rawInputs = row.inputs ?? {};
       const rawResult = row.result;
       const parsedResult = typeof rawResult === 'number' ? rawResult : Number(rawResult);
-      const result = Number.isFinite(parsedResult) ? parsedResult : Number.NaN;
-      return ({
+      const contextKey = normalizeOptionalText(row.context_key) ?? readFallbackText(rawInputs, FALLBACK_CONTEXT_KEY) ?? inferContextKey(row.type, row.label);
+      const projectLocation = normalizeOptionalText(row.project_location) ?? readFallbackText(rawInputs, FALLBACK_PROJECT_LOCATION);
+      const referenceRemark = normalizeOptionalText(row.reference_remark) ?? readFallbackText(rawInputs, FALLBACK_REFERENCE_REMARK);
+
+      return {
         id: row.id,
-        type: row.type as any,
+        type: row.type as SavedResult['type'],
         label: row.label,
-        inputs: row.inputs ?? {},
+        inputs: sanitizeInputs(rawInputs),
         outputs: row.outputs ?? {},
-        result,
+        result: Number.isFinite(parsedResult) ? parsedResult : Number.NaN,
         unit: row.unit,
         timestamp: new Date(row.created_at).getTime(),
-      });
+        contextKey,
+        projectLocation,
+        referenceRemark,
+      } satisfies SavedResult;
     });
+
+    if (filters?.contextKey) {
+      items = items.filter((item) => matchesContextKey(item, filters.contextKey));
+    }
+
+    if (filters?.limit && filters.limit > 0) {
+      items = items.slice(0, filters.limit);
+    }
+
+    return items;
   } catch (error: any) {
     lastHistoryError = error instanceof Error ? error : new Error('Failed to load history');
     console.warn('Failed to load history', error);
@@ -151,7 +282,6 @@ export const deleteHistoryRemote = async (id: string) => {
 };
 
 export const clearHistoryRemote = async () => {
-  // RLS will limit this to the current user
   const { error } = await supabase.from('calculations').delete().neq('id', '');
   if (error) throw error;
 };

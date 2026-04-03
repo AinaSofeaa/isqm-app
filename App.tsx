@@ -13,6 +13,8 @@ import {
 import Dashboard from './views/Dashboard';
 import BeamMenuView from './views/BeamMenuView';
 import ColumnMenuView from './views/ColumnMenuView';
+import ColumnConcreteView from './views/ColumnConcreteView';
+import ColumnFormworkView from './views/ColumnFormworkView';
 import ColumnView from './views/ColumnView';
 import SlabMenuView from './views/SlabMenuView';
 import ConcreteCalc from './views/ConcreteCalc';
@@ -38,7 +40,6 @@ const Header: React.FC = () => {
     if (path === '/slab') return t('flow.slabTitle');
     if (path === '/column/main-bars') return t('calc.mainBars');
     if (path === '/column/links') return t('calc.links');
-    if (path === '/column/total') return t('calc.totalColumn');
     if (path.endsWith('/konkrit')) return t('calc.concrete');
     if (path.endsWith('/kotak-acuan')) return t('calc.formwork');
     if (path.endsWith('/soffit-reinforcement')) return t('calc.soffit_reinforcement');
@@ -150,32 +151,57 @@ const App: React.FC = () => {
               <Route path="/beam" element={<BeamMenuView />} />
               <Route
                 path="/beam/konkrit"
-                element={<ConcreteCalc entryType="beam" entryLabel={t('legacy.concrete.title')} outputKey="concrete_m3" />}
+                element={(
+                  <ConcreteCalc
+                    entryType="beam"
+                    entryLabel={t('legacy.concrete.title')}
+                    outputKey="concrete_m3"
+                    saveLabel={`${t('history.typeBeam')} ${t('calc.concrete')}`}
+                    contextKey="beam-concrete"
+                  />
+                )}
               />
               <Route
                 path="/beam/kotak-acuan"
-                element={<FormworkCalc entryType="beam" entryLabel={t('legacy.formwork.title')} outputKey="formwork_m2" />}
+                element={(
+                  <FormworkCalc
+                    entryType="beam"
+                    entryLabel={t('legacy.formwork.title')}
+                    outputKey="formwork_m2"
+                    saveLabel={`${t('history.typeBeam')} ${t('calc.formwork')}`}
+                    contextKey="beam-formwork"
+                  />
+                )}
               />
               <Route path="/column" element={<ColumnMenuView />} />
-              <Route
-                path="/column/konkrit"
-                element={<ConcreteCalc entryType="column" entryLabel={t('legacy.concrete.title')} outputKey="concrete_m3" />}
-              />
-              <Route
-                path="/column/kotak-acuan"
-                element={<FormworkCalc entryType="column" entryLabel={t('legacy.formwork.title')} outputKey="formwork_m2" />}
-              />
+              <Route path="/column/konkrit" element={<ColumnConcreteView />} />
+              <Route path="/column/kotak-acuan" element={<ColumnFormworkView />} />
               <Route path="/column/main-bars" element={<ColumnView mode="main-bars" />} />
               <Route path="/column/links" element={<ColumnView mode="links" />} />
-              <Route path="/column/total" element={<ColumnView mode="total" />} />
               <Route path="/slab" element={<SlabMenuView />} />
               <Route
                 path="/slab/konkrit"
-                element={<ConcreteCalc entryType="slab" entryLabel={t('legacy.concrete.title')} outputKey="concrete_m3" />}
+                element={(
+                  <ConcreteCalc
+                    entryType="slab"
+                    entryLabel={t('legacy.concrete.title')}
+                    outputKey="concrete_m3"
+                    saveLabel={`${t('history.typeSlab')} ${t('calc.concrete')}`}
+                    contextKey="slab-concrete"
+                  />
+                )}
               />
               <Route
                 path="/slab/kotak-acuan"
-                element={<FormworkCalc entryType="slab" entryLabel={t('legacy.formwork.title')} outputKey="formwork_m2" />}
+                element={(
+                  <FormworkCalc
+                    entryType="slab"
+                    entryLabel={t('legacy.formwork.title')}
+                    outputKey="formwork_m2"
+                    saveLabel={`${t('history.typeSlab')} ${t('calc.formwork')}`}
+                    contextKey="slab-formwork"
+                  />
+                )}
               />
               <Route
                 path="/slab/soffit-reinforcement"

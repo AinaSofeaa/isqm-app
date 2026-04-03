@@ -7,17 +7,7 @@ import { useFeedback } from '../contexts/FeedbackContext';
 import { formatSupabaseError } from '../lib/formatSupabaseError';
 import { saveResultRemote } from '../services/historyService';
 import { useI18n } from '../src/i18n/I18nContext';
-import type { CalculationType, SavedResult } from '../types';
-
-type FormworkCalcProps = {
-  title?: string;
-  formula?: string;
-  entryType?: CalculationType;
-  entryLabel?: string;
-  outputKey?: string;
-  saveLabel?: string;
-  contextKey?: string;
-};
+import type { SavedResult } from '../types';
 
 const parseInput = (value: string) => {
   const parsed = Number(value);
@@ -31,107 +21,63 @@ const readInputValue = (item: SavedResult, key: string) => {
   return '';
 };
 
-const FormworkCalc: React.FC<FormworkCalcProps> = ({
-  title,
-  formula,
-  entryType,
-  entryLabel,
-  outputKey,
-  saveLabel,
-  contextKey,
-}) => {
+const ColumnFormworkView: React.FC = () => {
   const { t } = useI18n();
-  const resolvedTitle = title ?? t('calc.formwork');
-  const resolvedFormula = formula ?? t('legacy.formwork.formula');
-  const resolvedLabel = entryLabel ?? resolvedTitle;
-  const resolvedType = entryType ?? 'formwork';
-  const resolvedOutputKey = outputKey ?? 'formwork_m2';
-  const resolvedSaveLabel = saveLabel ?? resolvedLabel;
-  const resolvedContextKey = contextKey ?? null;
-  const historyType = resolvedType === 'beam' || resolvedType === 'column' || resolvedType === 'slab'
-    ? resolvedType
-    : null;
   const [length, setLength] = useState('');
+  const [width, setWidth] = useState('');
   const [height, setHeight] = useState('');
-  const [sides, setSides] = useState('1');
+  const [bilangan, setBilangan] = useState('');
   const [projectLocation, setProjectLocation] = useState('');
   const [referenceRemark, setReferenceRemark] = useState('');
-  const [area, setArea] = useState(0);
-  const [finalArea, setFinalArea] = useState(0);
+  const [oneColumnFormwork, setOneColumnFormwork] = useState(0);
+  const [totalFormwork, setTotalFormwork] = useState(0);
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   const { showSuccess, showError } = useFeedback();
 
   useEffect(() => {
-    const safeLength = parseInput(length);
-    const safeHeight = parseInput(height);
-    const safeSides = parseInput(sides);
-    const nextArea = safeLength * safeHeight * safeSides;
-    setArea(nextArea);
-    setFinalArea(nextArea * safeSides);
-  }, [height, length, sides]);
-
-  const resolveTotalLabel = () => {
-    switch (resolvedType) {
-      case 'beam':
-        return t('calc.totalOfBeam');
-      case 'column':
-        return t('calc.totalOfColumn');
-      case 'slab':
-        return t('calc.totalOfSlab');
-      default:
-        return t('calc.totalResultLabel');
-    }
-  };
+    const nextOneColumnFormwork = 2 * (parseInput(length) + parseInput(width)) * parseInput(height);
+    const nextTotalFormwork = nextOneColumnFormwork * parseInput(bilangan);
+    setOneColumnFormwork(nextOneColumnFormwork);
+    setTotalFormwork(nextTotalFormwork);
+  }, [bilangan, height, length, width]);
 
   const showValidation = () => {
     showError(t('modal.validationTitle'), t('modal.validationMsg'));
   };
 
-  const hasValidInputs = () => {
-    const l = Number(length);
-    const h = Number(height);
-    const s = Number(sides);
-    if (!Number.isFinite(l) || l <= 0) return false;
-    if (!Number.isFinite(h) || h <= 0) return false;
-    if (!Number.isFinite(s) || !Number.isInteger(s) || s < 1) return false;
-    return true;
-  };
-
   const handleReset = () => {
     setLength('');
+    setWidth('');
     setHeight('');
-    setSides('1');
+    setBilangan('');
     setProjectLocation('');
     setReferenceRemark('');
   };
 
   const handleSave = async () => {
-    if (!hasValidInputs() || finalArea <= 0) {
+    if (totalFormwork <= 0) {
       showValidation();
       return;
     }
 
     try {
-      const outputs = resolvedOutputKey
-        ? {
-            [resolvedOutputKey]: area,
-            formwork_total_m2: finalArea,
-          }
-        : undefined;
-
       await saveResultRemote({
-        type: resolvedType,
-        label: resolvedSaveLabel,
-        contextKey: resolvedContextKey,
+        type: 'column',
+        label: `${t('history.typeColumn')} ${t('calc.formwork')}`,
+        contextKey: 'column-formwork',
         projectLocation,
         referenceRemark,
         inputs: {
-          length: parseInput(length),
-          height: parseInput(height),
-          sides: parseInput(sides),
+          length_m: parseInput(length),
+          width_m: parseInput(width),
+          height_m: parseInput(height),
+          bilangan: parseInput(bilangan),
         },
-        outputs,
-        result: finalArea,
+        outputs: {
+          formwork_m2: oneColumnFormwork,
+          formwork_total_m2: totalFormwork,
+        },
+        result: totalFormwork,
         unit: 'm2',
       });
       setHistoryRefreshKey((prev) => prev + 1);
@@ -143,9 +89,10 @@ const FormworkCalc: React.FC<FormworkCalcProps> = ({
   };
 
   const handleReuse = (item: SavedResult) => {
-    setLength(readInputValue(item, 'length'));
-    setHeight(readInputValue(item, 'height'));
-    setSides(readInputValue(item, 'sides') || '1');
+    setLength(readInputValue(item, 'length_m'));
+    setWidth(readInputValue(item, 'width_m'));
+    setHeight(readInputValue(item, 'height_m'));
+    setBilangan(readInputValue(item, 'bilangan'));
     setProjectLocation(item.projectLocation ?? '');
     setReferenceRemark(item.referenceRemark ?? '');
   };
@@ -158,14 +105,15 @@ const FormworkCalc: React.FC<FormworkCalcProps> = ({
             <LayoutTemplate size={20} />
           </div>
           <div>
-            <h2 className="font-bold text-slate-800">{resolvedTitle}</h2>
-            <p className="text-xs text-slate-400">{resolvedFormula}</p>
+            <h2 className="font-bold text-slate-800">{t('calc.formwork')}</h2>
+            <p className="text-xs text-slate-400">{t('calc.formulaColumnFormwork')}</p>
           </div>
         </header>
 
-        <CalcField label={t('legacy.formwork.lengthLabel')} value={length} onChange={setLength} placeholder="0.00" />
-        <CalcField label={t('legacy.formwork.heightLabel')} value={height} onChange={setHeight} placeholder="0.00" />
-        <CalcField label={t('calc.bilanganLabel')} value={sides} onChange={setSides} placeholder="1" unit="ea" />
+        <CalcField label={t('legacy.concrete.lengthLabel')} value={length} onChange={setLength} placeholder="0.00" />
+        <CalcField label={t('legacy.concrete.widthLabel')} value={width} onChange={setWidth} placeholder="0.00" />
+        <CalcField label={t('legacy.concrete.heightLabel')} value={height} onChange={setHeight} placeholder="0.00" />
+        <CalcField label={t('calc.bilanganLabel')} value={bilangan} onChange={setBilangan} placeholder="0" unit="ea" />
 
         <SaveMetaFields
           projectLocation={projectLocation}
@@ -174,24 +122,26 @@ const FormworkCalc: React.FC<FormworkCalcProps> = ({
           onReferenceRemarkChange={setReferenceRemark}
         />
 
-        <div className="mt-8 pt-6 border-t border-slate-50">
-          <div className="flex justify-between items-end mb-4">
-            <span className="text-slate-400 font-medium">{t('legacy.formwork.totalArea')}</span>
+        <div className="mt-8 pt-6 border-t border-slate-50 space-y-4">
+          <div className="flex justify-between items-end">
+            <span className="text-slate-400 font-medium">{t('calc.columnFormworkOneLabel')}</span>
             <div className="text-right">
-              <span className="text-4xl font-black text-orange-600">{area.toFixed(2)}</span>
+              <span className="text-4xl font-black text-orange-600">{oneColumnFormwork.toFixed(2)}</span>
               <span className="text-lg font-bold text-orange-400 ml-1">m2</span>
             </div>
           </div>
+          <p className="text-xs text-slate-400">{t('calc.formulaColumnFormwork')}</p>
 
-          <div className="flex justify-between items-end mb-6 pt-4 border-t border-slate-100">
-            <span className="text-slate-400 font-medium">{resolveTotalLabel()}</span>
+          <div className="flex justify-between items-end pt-4 border-t border-slate-100">
+            <span className="text-slate-400 font-medium">{t('calc.columnFormworkTotalLabel')}</span>
             <div className="text-right">
-              <span className="text-4xl font-black text-orange-600">{finalArea.toFixed(2)}</span>
+              <span className="text-4xl font-black text-orange-600">{totalFormwork.toFixed(2)}</span>
               <span className="text-lg font-bold text-orange-400 ml-1">m2</span>
             </div>
           </div>
+          <p className="text-xs text-slate-400">{t('calc.formulaColumnFormworkTotal')}</p>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 pt-2">
             <button
               onClick={handleReset}
               className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-slate-100 text-slate-600 font-bold active:scale-95 transition-transform"
@@ -201,9 +151,9 @@ const FormworkCalc: React.FC<FormworkCalcProps> = ({
             </button>
             <button
               onClick={handleSave}
-              disabled={finalArea === 0}
+              disabled={totalFormwork === 0}
               className={`flex items-center justify-center gap-2 py-4 rounded-2xl font-bold active:scale-95 transition-all ${
-                finalArea > 0
+                totalFormwork > 0
                   ? 'bg-orange-600 text-white shadow-lg shadow-orange-200'
                   : 'bg-slate-300 text-slate-100 cursor-not-allowed'
               }`}
@@ -221,16 +171,14 @@ const FormworkCalc: React.FC<FormworkCalcProps> = ({
         </p>
       </div>
 
-      {historyType && resolvedContextKey ? (
-        <PageSavedHistorySection
-          type={historyType}
-          contextKey={resolvedContextKey}
-          refreshKey={historyRefreshKey}
-          onReuse={handleReuse}
-        />
-      ) : null}
+      <PageSavedHistorySection
+        type="column"
+        contextKey="column-formwork"
+        refreshKey={historyRefreshKey}
+        onReuse={handleReuse}
+      />
     </div>
   );
 };
 
-export default FormworkCalc;
+export default ColumnFormworkView;

@@ -8,6 +8,7 @@ interface CalcFieldProps {
   placeholder?: string;
   unit?: string;
   type?: string;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode'];
 }
 
 const CalcField: React.FC<CalcFieldProps> = ({ 
@@ -16,7 +17,8 @@ const CalcField: React.FC<CalcFieldProps> = ({
   onChange, 
   placeholder = "0.00", 
   unit = "m",
-  type = "number" 
+  type = "number",
+  inputMode,
 }) => {
   return (
     <div className="mb-5">
@@ -26,7 +28,7 @@ const CalcField: React.FC<CalcFieldProps> = ({
       <div className="relative group">
         <input
           type={type}
-          inputMode="decimal"
+          inputMode={inputMode ?? (type === 'number' ? 'decimal' : 'text')}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}

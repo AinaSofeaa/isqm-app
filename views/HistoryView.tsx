@@ -122,10 +122,13 @@ const HistoryView: React.FC = () => {
   };
 
   const getResultDecimals = (item: SavedResult) => {
+    const normalizedUnit = typeof item.unit === 'string' ? item.unit.toLowerCase().replace(/[^a-z0-9]/g, '') : '';
     if (item.type === 'rebar') return 0;
+    if (item.type === 'slab' && normalizedUnit === 'm2') return 3;
+    if (normalizedUnit === 'm3') return 3;
+    if (normalizedUnit === 'm2') return 2;
     if (item.type === 'concrete') return 3;
     if (item.type === 'formwork') return 2;
-    if (item.type === 'slab' && item.unit === 'm2') return 3;
     return 2;
   };
 
@@ -135,7 +138,9 @@ const HistoryView: React.FC = () => {
 
     const meta: Record<string, { label: string; unit?: string; decimals: number }> = {
       concrete_m3: { label: t('history.outputConcrete'), unit: 'm3', decimals: 3 },
+      concrete_total_m3: { label: t('history.outputConcreteTotal'), unit: 'm3', decimals: 3 },
       formwork_m2: { label: t('history.outputFormwork'), unit: 'm2', decimals: 3 },
+      formwork_total_m2: { label: t('history.outputFormworkTotal'), unit: 'm2', decimals: 2 },
       soffit_m2: { label: t('history.outputSoffit'), unit: 'm2', decimals: 3 },
       form_to_side_m2: { label: t('history.outputFormToSide'), unit: 'm2', decimals: 3 },
       steel_kg: { label: t('history.outputSteel'), unit: 'kg', decimals: 2 },
@@ -143,17 +148,19 @@ const HistoryView: React.FC = () => {
       steel_links_kg: { label: t('history.outputSteelLinks'), unit: 'kg', decimals: 2 },
       steel_total_kg: { label: t('history.outputSteelTotal'), unit: 'kg', decimals: 2 },
       main_bars_m: { label: t('history.outputMainBars'), unit: 'm', decimals: 2 },
+      main_bars_total_m: { label: t('history.outputMainBarsTotal'), unit: 'm', decimals: 2 },
       link_length_m: { label: t('history.outputLinkLength'), unit: 'm', decimals: 2 },
       links_total_m: { label: t('history.outputLinksTotal'), unit: 'm', decimals: 2 },
+      links_total_overall_m: { label: t('history.outputLinksOverallTotal'), unit: 'm', decimals: 2 },
       column_total_m: { label: t('history.outputColumnTotal'), unit: 'm', decimals: 2 },
       bars_qty: { label: t('history.outputBarsQty'), decimals: 2 },
       links_qty: { label: t('history.outputLinksQty'), decimals: 2 },
     };
 
     const orderMap: Record<string, string[]> = {
-      beam: ['concrete_m3', 'formwork_m2', 'steel_kg'],
-      slab: ['concrete_m3', 'formwork_m2', 'soffit_m2', 'form_to_side_m2', 'steel_kg', 'bars_qty'],
-      column: ['concrete_m3', 'formwork_m2', 'main_bars_m', 'link_length_m', 'links_qty', 'links_total_m', 'column_total_m', 'steel_main_kg', 'steel_links_kg', 'steel_total_kg'],
+      beam: ['concrete_m3', 'concrete_total_m3', 'formwork_m2', 'formwork_total_m2', 'steel_kg'],
+      slab: ['concrete_m3', 'concrete_total_m3', 'formwork_m2', 'formwork_total_m2', 'soffit_m2', 'form_to_side_m2', 'steel_kg', 'bars_qty'],
+      column: ['concrete_m3', 'concrete_total_m3', 'formwork_m2', 'formwork_total_m2', 'main_bars_m', 'main_bars_total_m', 'link_length_m', 'links_qty', 'links_total_m', 'links_total_overall_m', 'column_total_m', 'steel_main_kg', 'steel_links_kg', 'steel_total_kg'],
     };
 
     const order = orderMap[item.type] ?? Object.keys(outputs);
@@ -215,6 +222,8 @@ const HistoryView: React.FC = () => {
   };
 
   const formatItemLabel = (item: SavedResult) => {
+    if (item.label) return item.label;
+
     switch (item.type) {
       case 'beam':
         return t('nav.beamTitle');
@@ -231,6 +240,14 @@ const HistoryView: React.FC = () => {
       default:
         return item.label;
     }
+  };
+
+  const formatInputValue = (value: unknown) => {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : '--';
+    if (typeof value === 'string') return value;
+    if (typeof value === 'boolean') return value ? 'true' : 'false';
+    if (value === null || value === undefined) return '--';
+    return JSON.stringify(value);
   };
 
   return (
@@ -353,10 +370,22 @@ const HistoryView: React.FC = () => {
                     <div className="mt-3 flex gap-2 flex-wrap">
                       {Object.entries(inputs).map(([k, v]) => (
                         <span key={k} className="bg-slate-50 px-2 py-0.5 rounded text-[10px] font-bold text-slate-500 uppercase">
-                          {k}: {v}
+                          {k}: {formatInputValue(v)}
                         </span>
                       ))}
                     </div>
+
+                    {item.projectLocation ? (
+                      <p className="mt-3 text-xs font-semibold text-slate-600">
+                        {t('history.projectLocationLabel')}: <span className="font-medium text-slate-500">{item.projectLocation}</span>
+                      </p>
+                    ) : null}
+
+                    {item.referenceRemark ? (
+                      <p className="mt-1 text-xs font-semibold text-slate-600">
+                        {t('history.referenceRemarkLabel')}: <span className="font-medium text-slate-500">{item.referenceRemark}</span>
+                      </p>
+                    ) : null}
 
                     {outputs.length > 0 && (
                       <div className="mt-3">

@@ -6,10 +6,13 @@ export interface SavedResult {
   type: CalculationType;
   timestamp: number;
   label: string;
-  inputs: Record<string, number>;
+  inputs: Record<string, unknown>;
   outputs?: Record<string, unknown>;
   result: number;
   unit: string;
+  contextKey?: string | null;
+  projectLocation?: string | null;
+  referenceRemark?: string | null;
 }
 
 export interface CalculatorState {

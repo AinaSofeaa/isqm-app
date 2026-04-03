@@ -1,10 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import CalcField from '../components/CalcField';
 import { RotateCcw, Save, LayoutTemplate } from 'lucide-react';
+import CalcField from '../components/CalcField';
+import PageSavedHistorySection from '../components/PageSavedHistorySection';
+import SaveMetaFields from '../components/SaveMetaFields';
+import { useFeedback } from '../contexts/FeedbackContext';
+import { formatSupabaseError } from '../lib/formatSupabaseError';
 import { saveResultRemote } from '../services/historyService';
 import { useI18n } from '../src/i18n/I18nContext';
-import { formatSupabaseError } from '../lib/formatSupabaseError';
-import { useFeedback } from '../contexts/FeedbackContext';
+import type { SavedResult } from '../types';
+
+const readInputValue = (item: SavedResult, key: string) => {
+  const value = item.inputs?.[key];
+  if (typeof value === 'number') return value.toString();
+  if (typeof value === 'string') return value;
+  return '';
+};
 
 const SoffitCalc: React.FC = () => {
   const { t } = useI18n();
@@ -13,7 +23,10 @@ const SoffitCalc: React.FC = () => {
   const [thickness, setThickness] = useState('');
   const [sides, setSides] = useState('1');
   const [edges, setEdges] = useState('1');
-  const [total, setTotal] = useState<number>(0);
+  const [projectLocation, setProjectLocation] = useState('');
+  const [referenceRemark, setReferenceRemark] = useState('');
+  const [total, setTotal] = useState(0);
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   const { showSuccess, showError } = useFeedback();
 
   useEffect(() => {
@@ -29,7 +42,7 @@ const SoffitCalc: React.FC = () => {
     const safeE = Number.isFinite(e) ? e : 0;
     const area = (safeP * safeL) + (safeP * safeT * safeS) + (safeL * safeT * safeE);
     setTotal(area);
-  }, [length, width, thickness, sides, edges]);
+  }, [edges, length, sides, thickness, width]);
 
   const showValidation = () => {
     showError(t('modal.validationTitle'), t('modal.validationMsg'));
@@ -55,6 +68,8 @@ const SoffitCalc: React.FC = () => {
     setThickness('');
     setSides('1');
     setEdges('1');
+    setProjectLocation('');
+    setReferenceRemark('');
   };
 
   const handleSave = async () => {
@@ -62,10 +77,14 @@ const SoffitCalc: React.FC = () => {
       showValidation();
       return;
     }
+
     try {
       await saveResultRemote({
         type: 'slab',
-        label: t('calc.soffit_reinforcement'),
+        label: `${t('history.typeSlab')} ${t('calc.soffit_reinforcement')}`,
+        contextKey: 'slab-soffit',
+        projectLocation,
+        referenceRemark,
         inputs: {
           length: parseFloat(length),
           width: parseFloat(width),
@@ -77,17 +96,28 @@ const SoffitCalc: React.FC = () => {
           soffit_m2: total,
         },
         result: total,
-        unit: 'm2',
+        unit: 'm2'
       });
+      setHistoryRefreshKey((prev) => prev + 1);
       showSuccess(t('modal.saveSuccessTitle'), t('modal.saveSuccessMsg'));
-    } catch (e: any) {
-      const reason = formatSupabaseError(e, t('common.errorTryAgain'));
+    } catch (error: any) {
+      const reason = formatSupabaseError(error, t('common.errorTryAgain'));
       showError(t('modal.saveFailTitle'), t('modal.saveFailMsg', { error: reason }));
     }
   };
 
+  const handleReuse = (item: SavedResult) => {
+    setLength(readInputValue(item, 'length'));
+    setWidth(readInputValue(item, 'width'));
+    setThickness(readInputValue(item, 'thickness'));
+    setSides(readInputValue(item, 'sides') || '1');
+    setEdges(readInputValue(item, 'edges') || '1');
+    setProjectLocation(item.projectLocation ?? '');
+    setReferenceRemark(item.referenceRemark ?? '');
+  };
+
   return (
-    <div className="p-5">
+    <div className="p-5 space-y-6">
       <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
         <header className="flex items-center gap-3 mb-6">
           <div className="bg-orange-100 p-2.5 rounded-lg text-orange-600">
@@ -104,6 +134,13 @@ const SoffitCalc: React.FC = () => {
         <CalcField label={t('calc.slab.thicknessLabel')} value={thickness} onChange={setThickness} placeholder="0.00" />
         <CalcField label={t('legacy.formwork.sidesLabel')} value={sides} onChange={setSides} placeholder="1" unit="ea" />
         <CalcField label={t('calc.soffitEdgesLabel')} value={edges} onChange={setEdges} placeholder="1" unit="ea" />
+
+        <SaveMetaFields
+          projectLocation={projectLocation}
+          referenceRemark={referenceRemark}
+          onProjectLocationChange={setProjectLocation}
+          onReferenceRemarkChange={setReferenceRemark}
+        />
 
         <div className="mt-8 pt-6 border-t border-slate-50">
           <div className="flex justify-between items-end mb-6">
@@ -126,8 +163,8 @@ const SoffitCalc: React.FC = () => {
               onClick={handleSave}
               disabled={total === 0}
               className={`flex items-center justify-center gap-2 py-4 rounded-2xl font-bold active:scale-95 transition-all ${
-                total > 0 
-                  ? 'bg-orange-600 text-white shadow-lg shadow-orange-200' 
+                total > 0
+                  ? 'bg-orange-600 text-white shadow-lg shadow-orange-200'
                   : 'bg-slate-300 text-slate-100 cursor-not-allowed'
               }`}
             >
@@ -137,12 +174,19 @@ const SoffitCalc: React.FC = () => {
         </div>
       </div>
 
-      <div className="mt-6 bg-orange-50/50 rounded-2xl p-5 border border-orange-100">
+      <div className="bg-orange-50/50 rounded-2xl p-5 border border-orange-100">
         <h3 className="font-bold text-orange-800 text-sm mb-2">{t('legacy.formwork.didYouKnowTitle')}</h3>
         <p className="text-orange-700/70 text-sm leading-relaxed">
           {t('legacy.formwork.didYouKnowBody')}
         </p>
       </div>
+
+      <PageSavedHistorySection
+        type="slab"
+        contextKey="slab-soffit"
+        refreshKey={historyRefreshKey}
+        onReuse={handleReuse}
+      />
     </div>
   );
 };
