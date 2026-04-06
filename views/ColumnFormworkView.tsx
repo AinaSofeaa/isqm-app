@@ -25,21 +25,17 @@ const ColumnFormworkView: React.FC = () => {
   const { t } = useI18n();
   const [length, setLength] = useState('');
   const [width, setWidth] = useState('');
-  const [height, setHeight] = useState('');
   const [bilangan, setBilangan] = useState('');
   const [projectLocation, setProjectLocation] = useState('');
   const [referenceRemark, setReferenceRemark] = useState('');
-  const [oneColumnFormwork, setOneColumnFormwork] = useState(0);
   const [totalFormwork, setTotalFormwork] = useState(0);
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   const { showSuccess, showError } = useFeedback();
 
   useEffect(() => {
-    const nextOneColumnFormwork = 2 * (parseInput(length) + parseInput(width)) * parseInput(height);
-    const nextTotalFormwork = nextOneColumnFormwork * parseInput(bilangan);
-    setOneColumnFormwork(nextOneColumnFormwork);
+    const nextTotalFormwork = parseInput(length) * parseInput(width) * parseInput(bilangan);
     setTotalFormwork(nextTotalFormwork);
-  }, [bilangan, height, length, width]);
+  }, [bilangan, length, width]);
 
   const showValidation = () => {
     showError(t('modal.validationTitle'), t('modal.validationMsg'));
@@ -48,7 +44,6 @@ const ColumnFormworkView: React.FC = () => {
   const handleReset = () => {
     setLength('');
     setWidth('');
-    setHeight('');
     setBilangan('');
     setProjectLocation('');
     setReferenceRemark('');
@@ -70,11 +65,9 @@ const ColumnFormworkView: React.FC = () => {
         inputs: {
           length_m: parseInput(length),
           width_m: parseInput(width),
-          height_m: parseInput(height),
           bilangan: parseInput(bilangan),
         },
         outputs: {
-          formwork_m2: oneColumnFormwork,
           formwork_total_m2: totalFormwork,
         },
         result: totalFormwork,
@@ -91,7 +84,6 @@ const ColumnFormworkView: React.FC = () => {
   const handleReuse = (item: SavedResult) => {
     setLength(readInputValue(item, 'length_m'));
     setWidth(readInputValue(item, 'width_m'));
-    setHeight(readInputValue(item, 'height_m'));
     setBilangan(readInputValue(item, 'bilangan'));
     setProjectLocation(item.projectLocation ?? '');
     setReferenceRemark(item.referenceRemark ?? '');
@@ -112,7 +104,6 @@ const ColumnFormworkView: React.FC = () => {
 
         <CalcField label={t('legacy.concrete.lengthLabel')} value={length} onChange={setLength} placeholder="0.00" />
         <CalcField label={t('legacy.concrete.widthLabel')} value={width} onChange={setWidth} placeholder="0.00" />
-        <CalcField label={t('legacy.concrete.heightLabel')} value={height} onChange={setHeight} placeholder="0.00" />
         <CalcField label={t('calc.bilanganLabel')} value={bilangan} onChange={setBilangan} placeholder="0" unit="ea" />
 
         <SaveMetaFields
@@ -124,22 +115,13 @@ const ColumnFormworkView: React.FC = () => {
 
         <div className="mt-8 pt-6 border-t border-slate-50 space-y-4">
           <div className="flex justify-between items-end">
-            <span className="text-slate-400 font-medium">{t('calc.columnFormworkOneLabel')}</span>
-            <div className="text-right">
-              <span className="text-4xl font-black text-orange-600">{oneColumnFormwork.toFixed(2)}</span>
-              <span className="text-lg font-bold text-orange-400 ml-1">m2</span>
-            </div>
-          </div>
-          <p className="text-xs text-slate-400">{t('calc.formulaColumnFormwork')}</p>
-
-          <div className="flex justify-between items-end pt-4 border-t border-slate-100">
             <span className="text-slate-400 font-medium">{t('calc.columnFormworkTotalLabel')}</span>
             <div className="text-right">
               <span className="text-4xl font-black text-orange-600">{totalFormwork.toFixed(2)}</span>
               <span className="text-lg font-bold text-orange-400 ml-1">m2</span>
             </div>
           </div>
-          <p className="text-xs text-slate-400">{t('calc.formulaColumnFormworkTotal')}</p>
+          <p className="text-xs text-slate-400">{t('calc.formulaColumnFormwork')}</p>
 
           <div className="grid grid-cols-2 gap-3 pt-2">
             <button
